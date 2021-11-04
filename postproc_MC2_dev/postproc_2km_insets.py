@@ -1,7 +1,7 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.7/m3-4.9.2/envs/jaspy3.7-m3-4.9.2-r20210320/bin/python
 #SBATCH -p short-serial-4hr
 #SBATCH -A short4hr
-#SBATCH --array=[15]
+#SBATCH --array=[1-15]
 #SBATCH -o /home/users/emmah/log/postproc_2km/pp2_%a.o
 #SBATCH -e /home/users/emmah/log/postproc_2km/pp2_%a.e 
 #SBATCH -t 04:00:00
@@ -17,6 +17,7 @@ year=2015
 t1 = dt.datetime(2015,12,1)
 
 region = {"pe":"Java","pf":"Bengkulu"}
+region = {"ne":"Java","nf":"Bengkulu"}
 
 # Constraints on cell methods (ie UM time profiles)
 c_mean = iris.Constraint(cube_func=lambda cube: len(cube.cell_methods)>0 and (cube.cell_methods[0].method  in ["mean","sum"]))
@@ -119,6 +120,57 @@ file_variables = {
                                         "number_of_lightning_flashes"])}
 
 
+packing = {
+"00002":-8,
+"00003":-8,
+"00004":-8,
+"00010":-24,
+"00150":-10,
+"00389":-20,
+"00407":-3,
+"00408":-3,
+"00265":-6,
+"00266":-6,
+"00267":-6,
+"00268":-6,
+"04100":-99,
+"00012":-24,
+"00254":-24,
+"00272":-24,
+"00273":-24,
+"04113":-3,
+"04114":-3,
+"04115":-3,
+"04116":-3,
+"04117":-3,
+"00025":-3,
+"01207":-6,
+"01208":-6,
+"01209":-6,
+"02205":-6,
+"02206":-6,
+"03304":-3,
+"03359":-3,
+"03476":-10,
+"09202":-6,
+"09203":-6,
+"09204":-6,
+"09205":-6,
+"30462":-3,
+"30463":-3,
+"03305":-3,
+"03306":-3,
+"03307":-3,
+"03308":-3,
+"03309":-3,
+"03310":-3,
+"09216":-6,
+"09217":-6,
+"30403":-3,
+"30404":-3,
+"30405":-8,
+"30406":-8,
+
 names = {
 # multiple
   "x_wind":"eastward_wind",
@@ -131,9 +183,9 @@ names = {
   "ICE CRY RADAR REFLECTIVITY (dBZ)":"radar_reflectivity_due_to_cloud_snow",
   "RAIN RADAR REFLECTIVITY (dBZ)":"radar_reflectivity_due_to_rain",
   "LIQ. CLOUD RADAR REFLECTIVITY (dBZ)":"radar_reflectivity_due_to_cloud_liquid",
-  "BULK CLOUD FRACTION IN EACH LAYER":"bulk_cloud_fraction_in_atmosphere_layer",
-  "LIQUID CLOUD FRACTION IN EACH LAYER":"liquid_cloud_fraction_in_atmosphere_layer",
-  "FROZEN CLOUD FRACTION IN EACH LAYER":"frozen_cloud_fraction_in_atmosphere_layer",
+  "BULK CLOUD FRACTION IN EACH LAYER":"cloud_volume_fraction_in_atmosphere_layer",
+  "LIQUID CLOUD FRACTION IN EACH LAYER":"liquid_cloud_volume_fraction_in_atmosphere_layer",
+  "FROZEN CLOUD FRACTION IN EACH LAYER":"ice_cloud_volume_fraction_in_atmosphere_layer",
   "GRAUPEL AFTER TIMESTEP":"mass_fraction_of_graupel_in_air",
 #  "m01s05i250":"atmosphere_updraft_convective_mass_flux",
 #  "m01s05i251":"atmosphere_downdraft_convective_mass_flux",
@@ -191,9 +243,9 @@ units = {
 
 def postprocess_output(date1,outname,stream):
     # postprocess data from crun starting on date1 into file outname.nc
-    if stream == "pf" and outname=="radar_reflectivity":
-      print("skipping radar reflectivity: not outputted for Mirai transect")
-      return 
+    #if stream == "pf" and outname=="radar_reflectivity":
+    #  print("skipping radar reflectivity: not outputted for Mirai transect")
+    #  return 
     cell_methods,variables = file_variables[outname] 
     # loop through times for file output
     if outname in ["cloud_fraction","density","mixing_ratios","specific_humidity","pressure_rho_grid","pressure_theta_grid","radar_reflectivity","potential_temperature","winds"]:
@@ -207,7 +259,7 @@ def postprocess_output(date1,outname,stream):
       print(files)
 #      if stream in ["pa","pc"]:
 #         files.append(orogpath)
-      data = iris.load(files[:6])
+      data = iris.load(files)
       for name in units.keys():
         for cube in data.extract(name):
           cube.units = units[name]
@@ -233,6 +285,9 @@ def postprocess_output(date1,outname,stream):
         cube.coord("longitude").bounds  = None
         cube.coord("latitude").coord_system = iris.coord_systems.GeogCS(6371229.0)
         cube.coord("longitude").coord_system = iris.coord_systems.GeogCS(6371229.0)
+        pack = packing["%02d%03d"%(attributes["STASH"].section,attributes["STASH"].item)]
+        if pack >-99:
+          cube.data = (np.round(cube.data/(2**pack))*2**pack).astype(float)
         for c in cube.coords():
           c.var_name=None
         if cube.shape[1] == 70:
@@ -260,4 +315,4 @@ job =  int(os.environ["SLURM_ARRAY_TASK_ID"]) - 1
 #for job in range(16,20):
 var = list(file_variables.keys())[job]
 print(var)
-postprocess_output(dt.datetime(2015,12,1),var,"pf")
+postprocess_output(dt.datetime(2015,12,1),var,"ne")

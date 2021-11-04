@@ -1,0 +1,15 @@
+#/bin/bash
+set -x
+
+year=2018
+
+
+JID_JOB1=`sbatch -p short-serial-4hr  -A short4hr -o /home/users/emmah/log/cmems1-%a.o -e /home/users/emmah/log/cmems1-%a_.e -t 0:30:00 --job-name "p$year$a" --array=[1-26]  prep_v2_kpp_relaxation_ostia.py prep $year | cut -d " " -f 4`
+JID_JOB2=`sbatch -p short-serial-4hr -A short4hr  -o /home/users/emmah/log/cmems2-%a.o -e /home/users/emmah/log/cmems2-%a_.e -t 0:30:00 --job-name "r$year$a" --array=[1-24] --dependency=afterok:$JID_JOB1  prep_v2_kpp_relaxation_ostia.py roll $year | cut -d " " -f 4 `
+mkdir -p /gws/nopw/j04/terramaris//emmah/coupled_N1280/kpp_relaxation/$year
+JID_JOB3=`sbatch -p short-serial-4hr  -A short4hr -o /home/users/emmah/log/cmems3-%a.o -e /home/users/emmah/log/cmems3-%a_.e -t 1:00:00 --mem=24000 --job-name "c$year$a" --array=[1-20] --dependency=afterok:$JID_JOB2 prep_v2_kpp_relaxation_ostia.py combine $year | cut -d " " -f 4 `
+
+
+
+
+

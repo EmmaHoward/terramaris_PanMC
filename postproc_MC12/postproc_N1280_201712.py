@@ -1,20 +1,23 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.7/m3-4.9.2/envs/jaspy3.7-m3-4.9.2-r20210320/bin/python
-#SBATCH -p short-serial
-#SBATCH --array=[1-43]
-#SBATCH -o /home/users/emmah/log/pp_relax_%a.o
-#SBATCH -e /home/users/emmah/log/pp_relax_%a.e 
-#SBATCH -t 04:00:00
-#SBATCH --mem=24000
 
 import os
 import iris
 import datetime as dt
 import numpy as np
-from subprocess import call
+from subprocess import check_call
+import sys
+
+"""
+t1 = dt.datetime(int(sys.argv[1][:4]),int(sys.argv[1][4:6]),int(sys.argv[1][6:8]))
+
+if t1.month >6:
+  year = t1.year
+else:
+  year = t1.year - 1
+"""
 
 
-year=2015
-t1 = dt.datetime(2015,12,13)
+year=2017
 
 # Constraints on cell methods (ie UM time profiles)
 c_mean = iris.Constraint(cube_func=lambda cube: len(cube.cell_methods)>0 and (cube.cell_methods[0].method=="mean"))
@@ -23,10 +26,9 @@ c_min = iris.Constraint(cube_func=lambda cube: len(cube.cell_methods)>0 and (cub
 c_inst = iris.Constraint(cube_func=lambda cube: not cube.cell_methods)
 
 # system paths
-path = "/gws/nopw/j04/terramaris/emmah/flux_corr_N1280/u-cf309/%04d%02d%-2dT0000Z/"%(year,t1.year,t1.month,t1.day)
+finalpath = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/production_runs/%04d%02d_u-cf309/"%(year,(year+1)%100)
 orogpath = "/gws/nopw/j04/terramaris/emmah/flux_corr_N1280/orog.pp"
 outpath = "/work/scratch-pw/emmah/postproc_N1280_fc/"
-
 # re-initialisation timesteps
 reinit_step_pp = {"pa":4,"pb":24,"pc":6,"pd":12} # input, in hours
 reinit_step_nc = {"pa":1,"pb":6,"pc":1,"pd":6}   # output, in days
@@ -58,6 +60,7 @@ file_variables = {
                                         "toa_outgoing_longwave_flux_assuming_clear_sky",
                                         "Turbulent mixing height after boundary layer",
                                         "height_of_diagnostic_parcel_top",
+                                        "number_of_turbulent_mixing_levels",
                                         "combined_boundary_layer_type",
                                         "radar_reflectivity_due_to_all_hydrometeors_at_1km_altitude"]),
          "integral_inst":        ("pb",[c_inst],["Stable boundary layer indicator",                                            #17
@@ -84,7 +87,7 @@ file_variables = {
                                         "atmosphere_cloud_ice_content",
                                         "Vertical_integral_of_eastward_water_vapour_flux",
                                         "Vertical_integral_of_northward_water_vapour_flux"]),
-         "rain":                 ("pb",[c_mean,c_inst],["stratiform_rainfall_amount",                                          #19
+         "rainfall":                 ("pb",[c_mean,c_inst],["stratiform_rainfall_amount",                                     #19
                                         "stratiform_snowfall_amount",
                                         "stratiform_rainfall_flux",
                                         "stratiform_snowfall_flux",
@@ -92,7 +95,7 @@ file_variables = {
                                         "convective_snowfall_amount",
                                         "convective_rainfall_flux",
                                         "convective_snowfall_flux"]),
-         "surf inst":            ("pb",[c_inst],["surface_temperature",                                                        #20
+         "surf_inst":            ("pb",[c_inst],["surface_temperature",                                                        #20
                                         "surface_air_pressure",
                                         "eastward_wind",
                                         "northward_wind",
@@ -104,10 +107,11 @@ file_variables = {
                                         "explicit_friction_velocity",
                                         "soil_moisture_content",
                                         "canopy_water_amount",
+                                        "stomatal_conductance", 
                                         "moisture_content_of_soil_layer",
                                         "air_pressure_at_sea_level"]),
-         "surf_agg":             ("pb",[c_mean],["surface_net_downward_shortwave_flux",                                        #21
-                                        "surface_net_downward_shortwave_flux",
+         "surf_agg":             ("pb",[c_mean],["m01s01i201",                                                                 #21
+                                        "m01s01i202",
                                         "surface_downwelling_shortwave_flux_in_air_assuming_clear_sky",
                                         "surface_upwelling_shortwave_flux_in_air_assuming_clear_sky",
                                         "surface_downwelling_shortwave_flux_in_air",
@@ -116,6 +120,7 @@ file_variables = {
                                         "surface_downwelling_longwave_flux_in_air_assuming_clear_sky",
                                         "surface_upward_sensible_heat_flux",
                                         "surface_upward_water_flux",
+                                        "surface_moisture_flux", # 1 only
                                         "eastward_wind",
                                         "northward_wind",
                                         "wind_speed",
@@ -131,9 +136,8 @@ file_variables = {
                                         "transpiration_amount",
                                         "surface_runoff_flux",
                                         "subsurface_runoff_flux",
-                                        "air_pressure_at_sea_level",
-                                        "wind_speed_of_gust"]),
-         "range":             ("pb",[c_min,c_max],["air_temperature"]),                                                         #22
+                                        "air_pressure_at_sea_level"]),
+         "range":             ("pb",[c_min,c_max],["air_temperature","wind_speed_of_gust"]),                                   #22
 #                                         
          "dT_shortwave"          :("pc",[c_mean],["change_over_time_in_air_temperature_due_to_shortwave_radiation_noPC2"]),    #23
          "dT_longwave"           :("pc",[c_mean],["change_over_time_in_air_temperature_due_to_longwave_radiation_noPC2"]),     #24
@@ -145,23 +149,23 @@ file_variables = {
          "dq_total"              :("pc",[c_mean],["change_over_time_in_specific_humidity"]),                                   #30
          "temperature_pc"        :("pc",[c_mean],["air_temperature"]),                                                         #31
          "specific_humidity_pc"  :("pc",[c_mean],["specific_humidity"]),                                                       #32
-         "upward_air_velocity_pc":("pc",[c_mean],["upward_air_velocity"]),   
+         "upward_air_velocity_pc":("pc",[c_mean],["m01s30i003"]),                                                              #33 
 #
-         "Heavyside"             :("pd",[c_inst],["Heaviside function on pressure levels"]),                                   #33
-         "temperature_pd"        :("pd",[c_inst],["air_temperature"]),                                                         #34
-         "geopotential_height"   :("pd",[c_inst],["geopotential_height"]),                                                     #35
-         "omega"                 :("pd",[c_inst],["lagrangian_tendency_of_air_pressure"]),                                     #36
-         "relative_humidity"     :("pd",[c_inst],["relative_humidity"]),                                                       #37
-         "specific_humidity_pd"  :("pd",[c_inst],["specific_humidity"]),                                                       #38
-         "theta_w"               :("pd",[c_inst],["wet_bulb_potential_temperature"]),                                          #39
-         "eastward_wind_pd"      :("pd",[c_inst],["eastward_wind"]),                                                           #40
-         "div_vort"              :("pd",[c_inst,c_mean],["divergence_of_wind","atmosphere_relative_vorticity"]),               #41
-         "northward_wind_pd"     :("pd",[c_inst],["northward_wind"]),                                                          #42
-         "potential_vorticity"   :("pd",[c_inst],["potential_vorticity"]),                                                     #43
-         "daily_mean"            :("pd",[c_mean],["eastward_wind",                                                             #44
+         "Heavyside"             :("pd",[c_inst],["Heaviside function on pressure levels"]),                                   #34
+         "temperature_pd"        :("pd",[c_inst],["air_temperature"]),                                                         #35
+         "geopotential_height"   :("pd",[c_inst],["geopotential_height"]),                                                     #36
+         "omega"                 :("pd",[c_inst],["lagrangian_tendency_of_air_pressure"]),                                     #37
+         "relative_humidity"     :("pd",[c_inst],["relative_humidity"]),                                                       #38
+         "specific_humidity_pd"  :("pd",[c_inst],["specific_humidity"]),                                                       #39
+         "theta_w"               :("pd",[c_inst],["wet_bulb_potential_temperature"]),                                          #40
+         "eastward_wind_pd"      :("pd",[c_inst],["eastward_wind"]),                                                           #41
+         "div_vort"              :("pd",[c_inst,c_mean],["divergence_of_wind","atmosphere_relative_vorticity"]),               #42
+         "northward_wind_pd"     :("pd",[c_inst],["northward_wind"]),                                                          #43
+         "potential_vorticity"   :("pd",[c_inst],["potential_vorticity"]),                                                     #44
+         "daily_mean"            :("pd",[c_mean],["eastward_wind",                                                             #45
                                                   "northward_wind",
-                                                  "wet_bulb_potential_temperature"])
-#                                                  "Heaviside function on pressure levels"])
+                                                  "wet_bulb_potential_temperature",
+                                                  "Heaviside function on pressure levels"])
          
          }     
 
@@ -181,6 +185,7 @@ names = {
   "m01s03i462":"stomatal_conductance",
   "m01s03i539":"transpiration_amount",
   "m01s03i465":"explicit_friction_velocity",
+  "m01s00i259":"number_of_turbulent_mixing_levels",
   "m01s03i476":"combined_boundary_layer_type",
   "m01s09i202":"very_low_type_cloud_area_fraction",
   "m01s30i403":"total_column_dry_mass",
@@ -203,6 +208,7 @@ units = {
   "m01s05i250":"Pa/s",
   "m01s05i251":"Pa/s",
 # pb 
+  "m01s00i259":1,
   "m01s01i202":"W/m2",
   "m01s03i319":"m",
   "m01s03i359":"m",
@@ -237,6 +243,17 @@ def postprocess_output(date1,outname):
     # loop through times for file output
     for i in range(0,6,reinit_step_nc[stream]):
       date2 = date1 + dt.timedelta(i)
+      outfile = "tma_N1280_KPPcoupled_%s_%s_%04d%02d%02d.nc"%(stream,outname,date2.year,date2.month,date2.day)
+ #     if os.path.exists(finalpath+"%s/%s"%(stream,outfile)):
+ #       test = iris.load(finalpath+"%s/%s"%(stream,outfile))
+ #       if len(test)>0:
+ #         if len(test[0].coords())>0:
+ #           continue
+ #     if os.path.exists(outpath+"%s/%s"%(stream,outfile)):
+ #       test = iris.load(outpath+"%s/%s"%(stream,outfile))
+ #       if len(test)>0:
+ #         if len(test[0].coords())>0:
+ #           continue
       print(date2)
       # times for file input
       times = [date2+ dt.timedelta(i/24) for i in np.arange(0,24*reinit_step_nc[stream],reinit_step_pp[stream])]
@@ -262,18 +279,18 @@ def postprocess_output(date1,outname):
       data = data.extract(variables).extract(cell_methods)
       print(data)
       # check for the right number of variables. "range" has 1 more than "variables" due to max/min air temperature
-      if outname == "range": 
-        assert len(data) == len(variables)+1
-      else:
-        assert len(data) == len(variables)
+#      if outname == "range": 
+#        assert len(data) == len(variables)+1
+#      else:
+#        assert len(data) == len(variables)
       # mask pressure level data below orography
       if outname =="daily_mean":
         if len(data.extract("Heaviside function on pressure levels"))>0: 
           H = data.extract("Heaviside function on pressure levels")[0]
-          for cube in data:
-            if cube.name() not in ["Heaviside function on pressure levels","wet_bulb_potential_temperature"]: # wbpt is on a different grid
-              cube.data.mask += (H.data==0)
-              #cube.data = cube.data/H.data
+          #for cube in data:
+            #if cube.name() not in ["Heaviside function on pressure levels","wet_bulb_potential_temperature"]: # wbpt is on a different grid
+            #  cube.data = np.ma.masked_array(cube.data,mask=(H.data==0))
+            #  cube.data = cube.data/H.data
         # if heaviside wasnt averaged, approximate it
         else:
           from iris.coord_categorisation import add_day_of_year
@@ -292,17 +309,45 @@ def postprocess_output(date1,outname):
         data[0].data = np.ma.masked_array(data[0].data,mask=1-H.data)
       for cube in data:
         # convert units to hour since simulation started
-        cube.coord("time").convert_units("hours since 2015-11-01 00:00:00")
+        cube.coord("time").convert_units("hours since %04d-11-01 00:00:00"%year)
       # save to netcdf
-      iris.save(data,outpath+"%s/tma_N1280_KPPcoupled_%s_%s_%04d%02d%02d.nc"
-         %(stream,stream,outname,date2.year,date2.month,date2.day),zlib=True)
+      outfile = "tma_N1280_KPPcoupled_%s_%s_%04d%02d%02d_new.nc"%(stream,outname,date2.year,date2.month,date2.day)
+      iris.save(data,outpath+"%s/%s"%(stream,outfile),zlib=True)
+
+def copy_remove(date1,outname):
+    # postprocess data from crun starting on date1 into file outname.nc
+    stream,cell_methods,variables = file_variables[outname] 
+    # loop through times for file output
+    for i in range(0,6,reinit_step_nc[stream]):
+      date2 = date1 + dt.timedelta(i)
+      outfile = "tma_N1280_KPPcoupled_%s_%s_%04d%02d%02d_new.nc"%(stream,outname,date2.year,date2.month,date2.day)
+      cmd = "cp %s/%s/%s %s/%s/%s"%(outpath,stream,outfile,finalpath,stream,outfile)
+      check_call(cmd,shell=True)
+      cmd = "rm %s/%s/%s"%(outpath,stream,outfile)
+      check_call(cmd,shell=True)
 
 
-job = int(os.environ["SLURM_ARRAY_TASK_ID"]) - 1
-
+job = 20-1# int(os.environ["SLURM_ARRAY_TASK_ID"]) - 1
+#for job in range(31,32):
 #for job in range(16,20):
 var = list(file_variables.keys())[job]
 print(var)
 #if var in ["Heavyside","temperature_pd","geopotential_height","omega","relative_humidity","theta_w","updraft_mass_flux"]:
 #  exit()
-postprocess_output(t1,var)
+t0 = dt.datetime(2017,12,1)
+for i in [0,6,12,18,24]:
+  t1=t0+dt.timedelta(i)
+  print(t1)
+  path = "/gws/nopw/j04/terramaris/emmah/flux_corr_N1280_fix/u-cf309/%04d/%04d%02d%02dT0000Z/"%(year,t1.year,t1.month,t1.day)
+  postprocess_output(t1,var)
+#  copy_remove(t1,var)
+
+
+
+
+
+
+
+
+
+

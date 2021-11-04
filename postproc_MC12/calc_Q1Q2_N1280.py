@@ -1,29 +1,38 @@
 #!/apps/contrib/jaspy/miniconda_envs/jaspy3.7/m3-4.5.11/envs/jaspy3.7-m3-4.5.11-r20181219/bin/python
-#SBATCH -p short-serial
-#SBATCH --array=[1-6]
-#SBATCH -o /home/users/emmah/log/budget_15-%a.o
-#SBATCH -e /home/users/emmah/log/budget_15-%a.e 
+#SBATCH -p short-serial-4hr
+#SBATCH -A short4hr
+#SBATCH --array=[1-91]
+#SBATCH -o /home/users/emmah/log/budget_N1280/budget_15-%a.o
+#SBATCH -e /home/users/emmah/log/budget_N1280/budget_15-%a.e 
 #SBATCH -t 01:00:00
 #SBATCH --mem=24000
 
+from subprocess import check_call
 
-
-from scipy.fftpack import dct,idct
 import stratify
 import iris
-from iris.experimental import equalise_cubes
+from iris.experimental.equalise_cubes import equalise_attributes
 import numpy as np
 import datetime as dt
 from iris.aux_factory import HybridHeightFactory
 from iris.analysis import calculus_centred,calculus
 import os
+import sys
 
+year = int(sys.argv[1])
+
+#t1 = dt.datetime(int(sys.argv[1][:4]),int(sys.argv[1][4:6]),int(sys.argv[1][6:8]))
+t1 = dt.datetime(year,12,1)
+
+#if t1.month >6:
+#  year = t1.year
+#else:
+#  year = t1.year - 1
 
 path_template = "/gws/nopw/j04/terramaris/emmah/um/u-bs742/processed/MC_15_orog.nc"
 #path = "/gws/nopw/j04/terramaris/emmah/testrun/u-bs742/processed/terramaris_15km_MC_GA7/"
 
-path = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/production_runs/201516_u-cf309/"
-
+path = "/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/%04d%02d_u-cf309/"%(year,(year+1)%100)
 cx = iris.Constraint(longitude=lambda lon: 90<=lon<=155)
 cy = iris.Constraint(latitude=lambda lat: -15<=lat<=15)
 
@@ -84,12 +93,36 @@ def load_budget(date):
 def exner_rho(date,mp1):
 # read rho from pa stream.
 # if calculating potential temperature increment, uncomment code to read pressure and calculate exner pressure here
-  rho = iris.load(path+"pa/tma_N1280_KPPcoupled_pa_density_%d%02d%02d.nc"%(date.year,date.month,date.day),cx&cy)[0]
+
+  rho = iris.load(path+"pa/tma_N1280_KPPcoupled_pa_density_%d%02d%02d.nc"%(date.year,date.month,date.day),cx&cy)
+  if not (date.day==1 and date.month==12):
+    datem1 = date+dt.timedelta(-1)
+    rho += iris.load(path+"pa/tma_N1280_KPPcoupled_pa_density_%d%02d%02d.nc"%(datem1.year,datem1.month,datem1.day),cx&cy)
+  equalise_attributes(rho)
+  rho = rho.extract("air_density").concatenate_cube()
+  if len(rho.aux_factories)==0:
+    a = HybridHeightFactory(rho.coord('atmosphere_hybrid_height_coordinate'),\
+                          rho.coord('sigma'),\
+                          rho.coord('surface_altitude'))
+    rho.add_aux_factory(a)
+  if date.day==1 and date.month==12:
+    rho0 = rho[0]
+    rho0.coord("time").points = 720.5
+    rho0.coord("time").bounds = [[720,721]]
+    rho_roll = rho.rolling_window("time",iris.analysis.MEAN,2)
+    rho_roll.data=rho_roll.data.astype("float32")
+    rho0.cell_methods = rho_roll.cell_methods
+    rho_new = iris.cube.CubeList([rho0]+[rho_roll[i] for i in range(23)]).merge_cube()
+    rho = rho_new
+  else:
+    rho = rho[23:]
+    rho = rho.rolling_window("time",iris.analysis.MEAN,2)
+    rho.data=rho.data.astype("float32")
 #  p = iris.load(path+"pa/tma_N1280_KPPcoupled_pa_pressure_rho_grid_%d%02d%02d.nc"%(date.year,date.month,date.day),cx&cy)[0]
   for cube in [rho]:
     cube.remove_coord("forecast_period")
-    cube.remove_coord("time")
-    cube.add_dim_coord(mp1.coord("time"),0)
+#    cube.remove_coord("time")
+#    cube.add_dim_coord(mp1.coord("time"),0)
   rho = rho*mp1
 #  p0 = iris.coords.AuxCoord(100000, long_name='P0', units='Pa')
 #  pi = (p / p0)**(287.05/1005)
@@ -161,15 +194,13 @@ def ddz(cube):
   out.rename("ddz_"+cube.name())
   return out
 
-
-
 def ddz_(cube):
   # legacy: calculate vertical derivative from a sigma-coordinate grid
   z = cube[0].copy(data=cube.coord("altitude").points)
   z.units="m"
   dz = calculus.differentiate(z,"model_level_number")
   dcube = calculus.differentiate(cube,"model_level_number")
-  out = dcube/dz   out.rename("ddz_"+cube.name())
+  out = dcube/dz   
   out.rename("ddz_"+cube.name())
   return out
 
@@ -189,7 +220,6 @@ def main(date,i):
   data2 = exner_rho(date,mp1)   
   data=data+data2
   print(data)
-
   # regrid vertically from sigma levels to altitude above sea-level. New grid is theta-levels above ocean points
   data=regrid_z_asl(data)
 
@@ -204,7 +234,6 @@ def main(date,i):
   rho_w_T_means = data.extract("air_temperature")[0]*data.extract("upward_air_velocity")[0]*data.extract("air_density")[0]
   rho_w_T_means.rename("rho T w means")
   data.append(rho_w_T_means)
-
   # compute vertical derivatives of fluxes
   for cube in data.extract(["rho T w", "rho q w","rho T w means","rho q w means"]):
     data.append(ddz(cube))
@@ -237,11 +266,14 @@ def main(date,i):
   dq_sg = data.extract("subgrid_specific_humidity_increment")[0]
   dT_sg.units = "K/hr"
   dq_sg.units = "1/hr"
-
+  rho = data.extract("air_density")[0]
   # save to file
-  iris.save([dT_sub,dq_sub,dT_sg,dq_sg],path+"budgets/tma_N1280_KPPcoupled_budget_%03d_%04d%02d%02d.nc"%(i*12,date.year,date.month,date.day),zlib=True)
+  filename = "tma_N1280_KPPcoupled_budget_%03d_%04d%02d%02d.nc"%(i*12,date.year,date.month,date.day)
+  iris.save([dT_sub,dq_sub,dT_sg,dq_sg,rho],"/work/scratch-pw/emmah/write/%s"%(filename),zlib=True)
+  check_call("cp /work/scratch-pw/emmah/write/%s %s/budgets/%s"%(filename,path,filename),shell=True)
+  check_call("rm /work/scratch-pw/emmah/write/%s"%(filename),shell=True)
 
 
-job =  int(os.environ["SLURM_ARRAY_TASK_ID"]) - 1
-main(dt.datetime(2015,12,1)+dt.timedelta(job),9)
+job = int(os.environ["SLURM_ARRAY_TASK_ID"]) - 1
+main(t1+dt.timedelta(job),9)
 

@@ -1,12 +1,4 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.7/m3-4.9.2/envs/jaspy3.7-m3-4.9.2-r20210320/bin/python
-#SBATCH -p short-serial-4hr
-#SBATCH -A short4hr
-#SBATCH --array=[1-11]
-#SBATCH --job-name="pp_kpp_N1280"
-#SBATCH -o /home/users/emmah/log/postproc_N1280/kpp_%a.o
-#SBATCH -e /home/users/emmah/log/postproc_N1280/kpp_%a.e 
-#SBATCH -t 04:00:00
-#SBATCH --mem=24000
 
 import os
 import iris
@@ -28,11 +20,10 @@ t0 = dt.datetime(year,1,1)
 
 print(7+(t1-t0).days)
 
-path = "/gws/nopw/j04/terramaris/emmah/flux_corr_N1280/u-cf309/%04d/%04d%02d%02dT0000Z/"%(year,t1.year,t1.month,t1.day)
 #path = "/work/scratch-pw/emmah/kpp_N1280_Rig0/"
 
-outpath = "/work/scratch-nopw/emmah/postproc_N1280_fc/"
-finalpath = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/production_runs/%04d%02d_u-cf309/"%(year,(year+1)%100)
+outpath = "/work/scratch-nopw/emmah/postproc_2km_fc/"
+finalpath = "/gws/nopw/j04/terramaris/emmah/coupled_2km/production_runs/%04d%02d_u-cc339/"%(year,(year+1)%100)
 
 
 names = {"taux_in":"surface_downward_eastward_stress",
@@ -95,25 +86,29 @@ def postprocess_output(timestep,outname):
     cube.coord("longitude").units = "degrees"
     cube.coord("latitude").units = "degrees"
     cube.coords()[0].rename("time")
-    cube.coords()[0].units="days since %04d-11-01T0000Z"%year
+    cube.coords()[0].units="days since %04d-01-01T0000Z"%year
     cube.coords()[0].convert_units("hours since %04d-11-01T0000Z"%year)
   t = t0+dt.timedelta(timestep-1)
-  iris.save(data,outpath+"KPP/tma_N1280_KPPcoupled_kpp_%s_%04d%02d%02d.nc"%(outname,t.year,t.month,t.day),zlib=True)
+  iris.save(data,outpath+"kpp/tma_2km_KPPcoupled_kpp_%s_%04d%02d%02d.nc"%(outname,t.year,t.month,t.day),zlib=True)
 
 def copy_remove(t,outname):
     # postprocess data from crun starting on date1 into file outname.nc
     # loop through times for file output
-      outfile = "tma_N1280_KPPcoupled_kpp_%s_%04d%02d%02d.nc"%(outname,t.year,t.month,t.day)
-      cmd = "cp %s/KPP/%s %s/kpp/%s"%(outpath,outfile,finalpath,outfile)
+      outfile = "tma_2km_KPPcoupled_kpp_%s_%04d%02d%02d.nc"%(outname,t.year,t.month,t.day)
+      cmd = "cp %s/kpp/%s %s/kpp/%s"%(outpath,outfile,finalpath,outfile)
       check_call(cmd,shell=True)
-      cmd = "rm %s/KPP/%s"%(outpath,outfile)
+      cmd = "rm %s/kpp/%s"%(outpath,outfile)
       print(cmd)
       check_call(cmd,shell=True)
 
 
 job = int(os.environ["SLURM_ARRAY_TASK_ID"]) - 1
-for timestep in range(1+(t1-t0).days,7+(t1-t0).days):
+for i,timestep in enumerate(range(1+(t1-t0).days,7+(t1-t0).days)):
 #  for job in range(10):
+    if t1.day==1 and t1.month==12:
+      path = "/gws/nopw/j04/terramaris/emmah/coupled_2km/u-cc339/%04d/%04d%02d%02dT0000Z/"%(year,t1.year,t1.month,t1.day+i)
+    else:
+      path = "/gws/nopw/j04/terramaris/emmah/coupled_2km/u-cc339/%04d/%04d%02d%02dT0000Z/"%(year,t1.year,t1.month,t1.day)
     var = list(file_variables.keys())[job]
     print(var,timestep)
     postprocess_output(timestep,var)
