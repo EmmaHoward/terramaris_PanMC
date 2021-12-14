@@ -16,7 +16,7 @@ class panMC:
     if outname=="radsim":
       outname="bt_himawari_8_ahi"
     assert outname in panMC.get_outnames(domain,inset=inset),"panMC filename {0} is invalid. \n"+\
-                                     "try panMC.panMC.get_outnames(MC2/MC12,stream,inset=True/False) for valid names" 
+                                     "try panMC.panMC.get_outnames(MC2/MC12,stream,inset=True/False) for valid names".format(outname) 
     self.year=year
     self.yearstr = "{0}{1}".format(year,(year+1)%100)
     self.domain = domain
@@ -77,7 +77,7 @@ class panMC:
       elif stream == "kpp":
         return [key for key in file_split_2km.file_variables_ocean.keys()]
       elif stream == "radsim":
-        return "bt_himawari_8_ahi"
+        return ["bt_himawari_8_ahi"]
       elif stream in ["pe","pf"] or inset:
         return [key for key in file_split_2km.file_variables_pepf.keys()]
     elif domain=="MC12":
@@ -90,7 +90,7 @@ class panMC:
       elif stream == "kpp":
         return [key for key in file_split_N1280.file_variables_ocean.keys()]
       elif stream == "radsim":
-        return "bt_himawari_8_ahi"
+        return ["bt_himawari_8_ahi"]
       elif stream in ["pe","pf"] or inset:
          assert 0,"no insets in MC12 run" 
 
