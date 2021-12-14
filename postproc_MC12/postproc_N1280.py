@@ -243,16 +243,16 @@ def postprocess_output(date1,outname):
     for i in range(0,6,reinit_step_nc[stream]):
       date2 = date1 + dt.timedelta(i)
       outfile = "tma_N1280_KPPcoupled_%s_%s_%04d%02d%02d.nc"%(stream,outname,date2.year,date2.month,date2.day)
-      if os.path.exists(finalpath+"%s/%s"%(stream,outfile)):
-        test = iris.load(finalpath+"%s/%s"%(stream,outfile))
-        if len(test)>0:
-          if len(test[0].coords())>0:
-            continue
-      if os.path.exists(outpath+"%s/%s"%(stream,outfile)):
-        test = iris.load(outpath+"%s/%s"%(stream,outfile))
-        if len(test)>0:
-          if len(test[0].coords())>0:
-            continue
+#      if os.path.exists(finalpath+"%s/%s"%(stream,outfile)):
+#        test = iris.load(finalpath+"%s/%s"%(stream,outfile))
+#        if len(test)>0:
+#          if len(test[0].coords())>0:
+#            continue
+#      if os.path.exists(outpath+"%s/%s"%(stream,outfile)):
+#        test = iris.load(outpath+"%s/%s"%(stream,outfile))
+#        if len(test)>0:
+#          if len(test[0].coords())>0:
+#            continue
       print(date2)
       # times for file input
       times = [date2+ dt.timedelta(i/24) for i in np.arange(0,24*reinit_step_nc[stream],reinit_step_pp[stream])]

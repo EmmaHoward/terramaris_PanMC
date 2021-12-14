@@ -41,7 +41,6 @@ def prep(job,year1):
     cube.coord("latitude").guess_bounds()
   print(data2)
 # merge
-# Take 30 day running mean - note this discards first and last 15 days, so download extra
   data2 = iris.cube.CubeList([cube.regrid(template[0],iris.analysis.AreaWeighted()) for cube in data2])
 
 # fill vertically with lowest valid point
@@ -204,7 +203,7 @@ if cmd == "prep":
   for i in range(5):
     prep(job*5+i,year)
 elif cmd =="roll":
-  for i in range(4,5):
+  for i in range(5):
     roll(job*5+i,year)
 elif cmd == "combine":
   combine(job,year)

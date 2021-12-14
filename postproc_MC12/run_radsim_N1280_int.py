@@ -1,4 +1,5 @@
-#!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
+#!/apps/jasmin/jaspy/miniconda_envs/jaspy3.7/m3-4.9.2/envs/jaspy3.7-m3-4.9.2-r20210320/bin/python
+
 import iris
 import datetime as dt
 import numpy as np
@@ -174,6 +175,7 @@ def main(date):
                    /work/scratch-nopw/emmah/radsim/radsim_cfg_{year:04d}{month:02d}{day:02d}_{hour:02d}{mins:02d}.nl \
                    /work/scratch-nopw/emmah/radsim/radsim_{year:04d}{month:02d}{day:02d}_{hour:02d}{mins:02d}.pp".format(year=date.year,month=date.month,day=date.day,hour=date.hour,mins=date.minute),shell=True)
 
+"""
 job = int(os.environ["SLURM_ARRAY_TASK_ID"])-1
 #for i in range(4,145):
 for i in range(job*3,job*3+3,1):
@@ -189,7 +191,7 @@ for i in range(job*3,job*3+3,1):
   
 """
 # uncomment this and comment out above for loop to identify and interactively run timesteps that were missed by lotus 
-for i in range(0,24):
+for i in range(0,24*6):
   date = (t1+dt.timedelta(i/24))
   for minute in [0,21,39]:
     if minute==0 and i==0:
@@ -199,4 +201,3 @@ for i in range(0,24):
     if not (os.path.exists("/work/scratch-nopw/emmah/radsim/tma_radsim-himawari_8_ahi-%04d%02d%02d_%02d%02d.nc"%(date1.year,date1.month,date1.day,date1.hour,date1.minute))):
       print(date1)
       main(date1)
-"""

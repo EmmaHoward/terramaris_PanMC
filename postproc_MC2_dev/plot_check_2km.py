@@ -21,7 +21,7 @@ if t0.month >6:
 else:
   year = t0.year - 1
 
-finalpath = "/gws/nopw/j04/terramaris/emmah/coupled_2km/production_runs/%04d%02d_u-cc339/"%(year,(year+1)%100)
+finalpath = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/%04d%02d_u-cc339/"%(year,(year+1)%100)
 
 reinit_step_nc = {"pa":4,"pb":24,"pc":24,"pd":24}   # output, in days
 
@@ -32,8 +32,7 @@ reinit_step_pa = {"density":4,"potential_temperature":4,"pressure_rho_grid":4,"p
 fig=plt.figure(figsize=(12,12))
 def check_atmos_main():
   for j,var in enumerate(file_variables_full.keys()):
-   stream,cell_methods,variables = file_variables_full[var]
-   if stream in ["pd"]:
+    stream,cell_methods,variables = file_variables_full[var]
     print("%s: %s"%(stream,var),end=": ")
     reinit = reinit_step_nc[stream]
     if stream=="pa":
@@ -68,7 +67,8 @@ def check_atmos_main():
       elif cube.ndim ==2:
           sub = cube
           name=" full"
-      a=iplt.pcolormesh(sub,axes=ax)
+      v= sub.collapsed(["latitude","longitude"],iris.analysis.PERCENTILE,percent=(5,95)).data
+      a=iplt.pcolormesh(sub,vmin=v[0],vmax=v[1], axes=ax)
       plt.colorbar(a,ax=ax,orientation="horizontal")
       plt.title(cube.name()+name,fontsize="small")
       if var=="surface_inst" and j1==13:
@@ -81,6 +81,7 @@ def check_atmos_main():
        fig.clf()
        fig.set_figwidth(12)
        fig.set_figheight(12)
+    print(j)
     if j in [13,20,31,42]:
        plt.savefig("check_%s.png"%stream)
        fig.clf()
@@ -177,4 +178,5 @@ def check_radsim():
     print("radsim okay")
   return err
 
+#check_atmos_main()
 check_atmos_inset("pe")

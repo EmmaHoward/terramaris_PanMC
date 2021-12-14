@@ -176,20 +176,21 @@ file_variables_pepf = {
                                         "number_of_lightning_flashes"])}
 
 file_variables_full = {
-         "radar_reflectivity"   :("pa",[c_inst],["radar_reflectivity_due_to_all_hydrometeor_species"]),                        # 1
-         "density"              :("pa",[c_inst],["air_density"]),                                                              # 2
-         "potential_temperature":("pa",[c_inst],["air_potential_temperature"]),                                                # 3
-         "pressure_rho_grid"    :("pa",[c_inst],["m01s00i407"]),                                                               # 4
-         "pressure_theta_grid"  :("pa",[c_inst],["m01s00i408"]),                                                               # 5
-         "cloud_fraction"       :("pa",[c_inst],["cloud_area_fraction_in_atmosphere_layer"]),                                  # 6
-         "qcf"                  :("pa",[c_inst],["mass_fraction_of_cloud_ice_in_air"]),                                        # 7
-         "qcl"                  :("pa",[c_inst],["mass_fraction_of_cloud_liquid_water_in_air"]),                               # 8
-         "rain"                 :("pa",[c_inst],["mass_fraction_of_rain_in_air"]),                                             # 9
-         "graupel"              :("pa",[c_inst],["mass_fraction_of_graupel_in_air"]),                                          #10
-         "specific_humidity"    :("pa",[c_inst],["specific_humidity"]),                                                        #11
-         "upward_air_velocity"  :("pa",[c_inst],["upward_air_velocity"]),                                                      #12
-         "eastward_wind"        :("pa",[c_inst],["eastward_wind"]),                                                            #13
-         "northward_wind"       :("pa",[c_inst],["northward_wind"]),                                                           #14
+         "density"              :("pa",[c_inst],["air_density"]),                                                              # 1
+         "potential_temperature":("pa",[c_inst],["air_potential_temperature"]),                                                # 2
+         "pressure_rho_grid"    :("pa",[c_inst],["m01s00i407"]),                                                               # 3
+         "pressure_theta_grid"  :("pa",[c_inst],["m01s00i408"]),                                                               # 4
+         "specific_humidity"    :("pa",[c_inst],["specific_humidity"]),                                                        # 5
+         "upward_air_velocity"  :("pa",[c_inst],["upward_air_velocity"]),                                                      # 6
+         "eastward_wind"        :("pa",[c_inst],["eastward_wind"]),                                                            # 7
+         "northward_wind"       :("pa",[c_inst],["northward_wind"]),                                                           # 8
+#
+         "radar_reflectivity"   :("pa",[c_inst],["radar_reflectivity_due_to_all_hydrometeor_species"]),                        # 9
+         "cloud_fraction"       :("pa",[c_inst],["cloud_area_fraction_in_atmosphere_layer"]),                                  #10
+         "qcf"                  :("pa",[c_inst],["mass_fraction_of_cloud_ice_in_air"]),                                        #11
+         "qcl"                  :("pa",[c_inst],["mass_fraction_of_cloud_liquid_water_in_air"]),                               #12
+         "rain"                 :("pa",[c_inst],["mass_fraction_of_rain_in_air"]),                                             #13
+         "graupel"              :("pa",[c_inst],["mass_fraction_of_graupel_in_air"]),                                          #14
 #
          "atmos":                ("pb",[c_mean,c_inst],["atmosphere_boundary_layer_thickness",                                 #15
                                         "toa_incoming_shortwave_flux",

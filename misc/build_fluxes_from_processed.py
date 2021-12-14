@@ -1,7 +1,6 @@
 import iris
 import datetime as dt
 import sys
-from panMC import panMC
 date = dt.datetime(int(sys.argv[1][:4]),int(sys.argv[1][4:6]),int(sys.argv[1][6:8]))
 datem1 =date+dt.timedelta(-6)
 
@@ -9,15 +8,18 @@ year = date.year - int(date.month < 6)
 
 init = (date-dt.datetime(year,1,1)).days+1
 
-dates = [date+dt.timedelta(i) for i in range(6)]
-data = panMC(year,"MC12","sea_surface").load_iris(dates)
+path = "/gws/nopw/j04/terramaris/emmah/flux_corr_N1280/u-cf309/%04d/%04d%02d%02dT0000Z/"%(year,date.year,date.month,date.day)
+#path2 = "/gws/nopw/j04/terramaris/emmah/flux_corr_N1280/u-cf309/%04d/%04d%02d%02dT0000Z/"%(year,datem1.year,datem1.month,datem1.day)
+data = iris.load([path+"KPPocean_?????.nc"])#,path2+"KPPocean_%05d.nc"%(init-1)])
+data = data.concatenate()
+
 out = iris.cube.CubeList()
 
-data.extract("surface_net_downward_shortwave_flux")[0].rename("swf")
-data.extract("surface_downward_heat_flux_in_sea_water_excludes_shortwave")[0].rename("lwf")
-data.extract("surface_downward_eastward_stress")[0].rename("taux")
-data.extract("surface_downward_northward_stress")[0].rename("tauy")
-data.extract("precipitation minus evaporation")[0].rename("pme")
+data.extract("solar_in")[0].rename("swf")
+data.extract("nsolar_in")[0].rename("lwf")
+data.extract("taux_in")[0].rename("taux")
+data.extract("tauy_in")[0].rename("tauy")
+data.extract("PminusE_in")[0].rename("pme")
 
 
 out = data.extract(["swf","lwf","pme","taux","tauy"])
@@ -26,6 +28,7 @@ out = data.extract(["swf","lwf","pme","taux","tauy"])
 
 for cube in out:
   cube.coords()[0].rename("time")
+  cube.coord("time").convert_units("days since %04d-01-01 00:00:00"%year)
   cube.coord("time").points = cube.coord("time").points - 1/48
 
 for name in ["shf","lhf"]:

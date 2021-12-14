@@ -7,7 +7,7 @@ import warnings
 class panMC:
   def __init__(self,year,domain,outname,inset=False):
     assert type(year) == int,"year must be an integer" 
-    assert (year <=2023) and (year>2003),"year must be between 2003 and 2023" 
+    assert (year <=2023) and (year>2002),"year must be between 2003 and 2023" 
     assert domain in ["MC2-tmp","MC2","MC12"],"domain must be MC2 or MC12" 
     assert inset in [False,"Java","Bengkulu"]
     if domain=="MC12":
@@ -39,6 +39,8 @@ class panMC:
       datestr = "{year:04d}{month:02d}{day:02d}"
     if self.outname =="bt_himawari_8_ahi":
       self.filepath = panMC.finalpath(self.domain,self.year)+self.stream+"/"+filestart+self.outname+"-"+datestr+".nc"
+    elif self.inset: 
+      self.filepath = panMC.finalpath(self.domain,self.year)+self.stream+"/"+filestart+self.inset+"_"+self.outname+"_"+datestr+".nc"
     else:
       self.filepath = panMC.finalpath(self.domain,self.year)+self.stream+"/"+filestart+self.stream+"_"+self.outname+"_"+datestr+".nc"
  
@@ -48,9 +50,9 @@ class panMC:
     if domain=="MC2-tmp":
       return "/gws/nopw/j04/terramaris/emmah/coupled_2km/production_runs/{0}{1}_u-cc339/".format(year,(year+1)%100)
     elif domain=="MC2":
-      return "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/{0}{1}_u-cc339/".format(year,(year+1)%100)
+      return "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/{0:04d}{1:02d}_u-cc339/".format(year,(year+1)%100)
     elif domain=="MC12":
-      return "/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/{0}{1}_u-cf309/".format(year,(year+1)%100)
+      return "/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/{0:04d}{1:02d}_u-cf309/".format(year,(year+1)%100)
     else: 
       assert 0, "invalid domain"
 
@@ -60,6 +62,10 @@ class panMC:
     #    stream: model output stream: pa - pf, or kpp or radsim. 
     #    inset:  full domain or 5-minute limited area inset
     outnames = []
+    if inset=="Bengkulu":
+       stream="pf"
+    if inset=="Java":
+       stream="pe"
     assert stream is None or stream in ["pa","pb","pc","pd","pe","pf","radsim","kpp"]
     if domain in ["MC2-tmp","MC2"]:
       import file_split_2km
@@ -94,7 +100,7 @@ class panMC:
     if self.domain in ["MC2","MC2-tmp"]:
       import file_split_2km
       if self.inset:
-        stream = {"Java":"pe","Bengkulu":"pf"}[inset]
+        stream = {"Java":"pe","Bengkulu":"pf"}[self.inset]
         return stream,file_split_2km.file_variables_pepf[self.outname][1]
       elif self.outname in file_split_2km.file_variables_ocean.keys():
         return "kpp",file_split_2km.file_variables_ocean[self.outname]
@@ -152,17 +158,29 @@ class panMC:
     #   specify_times: True or False. If true, only files with specified start hour are read.
     #                  this is only intended for files with sub-daily reinitialisation
     import iris
-    from iris.experimental.equalise_cubes import equalise_attributes
+    from iris.util import equalise_attributes
     files = self.fill_paths_with_dates(dates,specify_times)
-    if dates != None and not specify_times:
+    if not (dates is None or specify_times):
       ct = iris.Constraint(time = lambda t: (dt.datetime(t.point.year,t.point.month,t.point.day) in dates 
                       or (dt.datetime(t.point.year,t.point.month,t.point.day)-dt.timedelta(1) in dates and t.point.hour==0 and t.point.minute <2)) 
                       and not dt.datetime(t.point.year,t.point.month,t.point.day,t.point.hour,t.point.minute) == dates[0]  )
       Constraints = ct&Constraints
+#    if self.year==2015 and self.stream=="kpp":
+#      if len(variables)>0:
+#        data = iris.load(files).extract(variables)
+#      else:
+#        data = iris.load(files)
+#      for cube in data:
+#        if (cube.coord("time").units.num2date(cube.coord("time").points[0]) - dt.datetime(2015,12,1)).days > 91:
+#           cube.coord("time").units = "hours since 2015-01-01T0000Z"
+#           cube.coord("time").convert_units("hours since 2015-11-01T0000Z")
+#      data=data.extract(Constraints)
+#    else: 
     if len(variables)>0:
       data = iris.load(files,Constraints).extract(variables)
     else:
       data = iris.load(files,Constraints)
+    equalise_attributes(data)
     data=data.concatenate().merge()
     for cube in data:
       # warn the user about hour selection, as this may catch someone out otherwise

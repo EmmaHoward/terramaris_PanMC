@@ -1,12 +1,4 @@
 #!/apps/contrib/jaspy/miniconda_envs/jaspy3.7/m3-4.5.11/envs/jaspy3.7-m3-4.5.11-r20181219/bin/python
-#SBATCH -p short-serial-4hr
-#SBATCH -A short4hr
-#SBATCH --array=[7-17]
-#SBATCH -o /home/users/emmah/log/budget_N1280/rho_2-%a.o
-#SBATCH -e /home/users/emmah/log/budget_N1280/rho_2-%a.e 
-#SBATCH -t 04:00:00
-#SBATCH --mem=128000
-
 from iris.aux_factory import HybridHeightFactory
 from scipy.fftpack import dct,idct
 import stratify
@@ -19,17 +11,14 @@ from iris.analysis import calculus_centred,calculus
 import os
 import sys
 from area_weighted_regrid_constant_altitude import AreaWeightedAltitude
+import sys
+from subprocess import check_call
+year = int(sys.argv[1])
+t1 = dt.datetime(year,12,1)
 
-t1 = dt.datetime(2015,12,13)
-
-if t1.month >6:
-  year = t1.year
-else:
-  year = t1.year - 1
-
-
+scratchpath = "/work/scratch-pw2/emmah/tmp_Q1Q2/rho"
 #path = "/gws/nopw/j04/terramaris/emmah/testrun/u-bs742/processed/terramaris_15km_MC_GA7/"
-
+check_call("mkdir "+scratchpath,shell=True)
 def add_altitude_coord(cube):
         orog=iris.load(orogpath)[0]#.extract(cx&cy)
         orog_c = iris.coords.AuxCoord(orog.data,standard_name='surface_altitude',units='m')
@@ -102,7 +91,7 @@ def exner_rho(date):
   rho.rename(rhod.name())
   add_altitude_coord(rho)
   rho = interp2km(rho)
-  iris.save(rho,"/work/scratch-nopw/emmah/rho/rho_%d%02d%02d_%02d.nc"%(date.year,date.month,date.day,date.hour))
+  iris.save(rho,"%s/rho_%d%02d%02d_%02d.nc"%(scratchpath,date.year,date.month,date.day,date.hour))
 
 job =int(os.environ["SLURM_ARRAY_TASK_ID"]) -1 
 for i in range(0,24,4):
