@@ -14,8 +14,7 @@ import iris.cube
 cy =iris.Constraint(latitude=lambda y: -15<=y<=15)
 cx =iris.Constraint(longitude=lambda y: 92<=y<152)
 cz = iris.Constraint(pressure=lambda p: p in [200,850])
-path = {"MC12":"/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/",
-        "MC2" :"/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/"}
+path = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/"
 era5path = "/gws/nopw/j04/terramaris/emmah/era5/"
 bands = np.array([45,30,18,15,10,6,3])
 
@@ -35,10 +34,17 @@ def adjust_doyr(cube):
 
 
 def band_regress(data1,data2):
-  data1.data=detrend(data1.data.filled(0),axis=1)
-  data2.data=detrend(data2.data.filled(0),axis=1)
-  F1 = np.fft.fft(dct(dct(data1.data,axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),axis=1)
-  F2 = np.fft.fft(dct(dct(data2.data,axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),axis=1)
+  if data1.ndim == 4:
+    data1.data=detrend(data1.data.filled(0),axis=1)
+    data2.data=detrend(data2.data.filled(0),axis=1)
+    F1 = np.fft.fft(dct(dct(data1.data,axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),axis=1)
+    F2 = np.fft.fft(dct(dct(data2.data,axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),axis=1)
+  elif data1.ndim==3:
+    data1.data=detrend(data1.data.filled(0),axis=0)
+    data2.data=detrend(data2.data.filled(0),axis=0)
+    F1 = np.fft.fft(dct(dct([data1.data],axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),axis=1)
+    F2 = np.fft.fft(dct(dct([data2.data],axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho'),axis=1)
+
 #  F1x =           dct(dct(data1.data,axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho')
 #  F2x =           dct(dct(data2.data,axis=3,type=2,norm='ortho'),axis=2,type=2,norm='ortho')
 #  F1t = np.fft.fft(data1,axis=1)
@@ -136,73 +142,49 @@ def read_data(var):
 #correl_P = main("rainfall")
 
 colours = ["tab:blue","tab:orange","tab:green","tab:red","tab:purple"]
-def plot(correls2,correls12):
+def plot(correls):
   cmap1 = ListedColormap(sns.color_palette("viridis",10))
-  fig = plt.figure(figsize=(8,7))
-  nx = len(correls2)
-  ny = 2
-  ax1 = fig.add_axes([0.08,0.3,0.12,0.25])
-  ax5 = fig.add_axes([0.08,0.63,0.12,0.25])
+  fig = plt.figure(figsize=(9,5))
+  nx = len(correls)
+  ny = 1
+  ax1 = fig.add_axes([0.08,0.38,0.12,0.55])
   ax1.grid()
-  ax5.grid()
-  ax4 = fig.add_axes([0.915,0.3+0.075,0.03,0.4])
-  ax2 = []
-  for i,key in enumerate((correls12)):
-    correl,correlx,correlt = correls12[key]
-    ax2.append(fig.add_axes([0.25+i*0.7/nx,0.1,0.6/nx,0.12]))
-    ax3 = fig.add_axes([0.25+i*0.7/nx,0.3,0.6/nx,0.25])
-    ax2[i].grid()
+  ax4 = fig.add_axes([0.915,0.38+0.075,0.03,0.4])
+  for i,key in enumerate((correls)):
+    correl,correlx,correlt = correls[key]
+    ax2 = fig.add_axes([0.25+i*0.7/nx,0.1,0.6/nx,0.18])
+    ax3 = fig.add_axes([0.25+i*0.7/nx,0.38,0.6/nx,0.55])
+    ax2.grid()
     ax3.grid()
     a=ax3.pcolormesh(1/bins_x,1/bins_t,correl,cmap=cmap1,vmin=0,vmax=1)
-    ax1.plot(correlt,2/(bins_t[1:]+bins_t[:-1]),c=colours[i+nx])
-    ax2[i].plot(2/(bins_x[1:]+bins_x[:-1]),correlx,c=colours[i+nx])
+    ax1.plot(correlt,2/(bins_t[1:]+bins_t[:-1]),c=colours[i])
+    ax2.plot(2/(bins_x[1:]+bins_x[:-1]),correlx,c=colours[i])
 #  ax1.set_ylim(np.fft.fftshift(freqt)[0],np.fft.fftshift(freqt)[-1])
     ax3.set_yticks(1/tticks)
     ax3.set_yticklabels(["1/%d"%t for t in tticks])
-    ax2[i].set_xticks(1/xticks)
+    ax2.set_xticks(1/xticks)
     ax3.set_xticks(1/xticks)
-    ax2[i].set_xticklabels(xticks)
+    ax2.set_xticklabels(xticks)
     ax3.set_xticklabels(60//xticks)
-    ax2[i].set_xlim(1/bins_x[0],2/(bins_x[-1]+bins_x[-2]))
+    ax2.set_xlim(1/bins_x[0],2/(bins_x[-1]+bins_x[-2]))
     ax3.set_xlim(1/bins_x[0],2/(bins_x[-1]+bins_x[-2]))
     ax3.set_ylim(1/bins_t[0],2/(bins_t[-1]+bins_t[-2]))
-    ax2[i].set_ylim(0,1)
-    ax3.set_title("MC12 vs Obs - %s"%key,color=colours[i+nx])
-    ax3.set_xlabel("Domain Zonal Wavenumber")
-    ax2[i].set_xlabel("Wavelength (degrees)")
-  for i,key in enumerate((correls2)):
-    correl,correlx,correlt = correls2[key]
-    ax3 = fig.add_axes([0.25+i*0.7/nx,0.63,0.6/nx,0.25])
-    ax3.grid()
-    a=ax3.pcolormesh(1/bins_x,1/bins_t,correl,cmap=cmap1,vmin=0,vmax=1)
-    ax5.plot(correlt,2/(bins_t[1:]+bins_t[:-1]),c=colours[i])
-    ax2[i].plot(2/(bins_x[1:]+bins_x[:-1]),correlx,c=colours[i])
-#  ax1.set_ylim(np.fft.fftshift(freqt)[0],np.fft.fftshift(freqt)[-1])
-    ax3.set_yticks(1/tticks)
-    ax3.set_yticklabels(["1/%d"%t for t in tticks])
-    ax3.set_xticks(1/xticks)
-    ax3.set_xticklabels(60//xticks)
-    ax3.set_xlim(1/bins_x[0],2/(bins_x[-1]+bins_x[-2]))
-    ax3.set_ylim(1/bins_t[0],2/(bins_t[-1]+bins_t[-2]))
-    ax3.set_title("MC2 vs Obs - %s"%key,color=colours[i])
+    ax2.set_ylim(0,1)
+    ax3.set_title("MC12 vs Obs - %s"%key,color=colours[i])
+    ax3.set_xlabel("Zonal Wavenumber")
+    ax2.set_xlabel("Wavelength (degrees)")
   ax1.set_yticklabels(["1/%d"%t for t in tticks])
   ax1.set_yticks(1/tticks)
   ax1.set_ylim(1/bins_t[0],2/(bins_t[-1]+bins_t[-2])) 
   ax1.set_xlim(0,1)
   ax1.set_ylabel("frequency (1/days)")
-  ax5.set_yticklabels(["1/%d"%t for t in tticks])
-  ax5.set_yticks(1/tticks)
-  ax5.set_ylim(1/bins_t[0],2/(bins_t[-1]+bins_t[-2])) 
-  ax5.set_xlim(0,1)
-  ax5.set_ylabel("frequency (1/days)")
   fig.colorbar(a,cax=ax4)
-  return fig
 
-def read_winds(years,var,dom):
+def read_winds(years,var):
   MC,obs = iris.cube.CubeList(),iris.cube.CubeList()
   for year in years:
     yc = iris.coords.DimCoord(year,long_name="year",units="years")
-    MC.append( iris.load(path[dom]+"/wind/%s_%04d%02d_winds_regridded0p25.nc"%(dom,year,(year+1)%100),cx&cy).extract("eastward_wind")[0])
+    MC.append( iris.load(path+"/wind/MC2_%04d%02d_winds_regridded0p25.nc"%(year,(year+1)%100),cx&cy).extract("eastward_wind")[0])
     obs.append(iris.load(era5path+"uv_%04d%02d.nc"%(year,(year+1)%100),cx&cy).extract("eastward_wind")[0][:90])
     add_day_of_year(obs[-1],"time","doyr")
     obs[-1].add_aux_coord(yc)
@@ -216,7 +198,6 @@ def read_winds(years,var,dom):
     except:
       continue
   iris.util.equalise_attributes(obs)
-  iris.util.equalise_attributes(MC)
   MC = MC.merge_cube()
   obs = obs.merge_cube()
   obs = obs.rolling_window("latitude",iris.analysis.MEAN,2)
@@ -225,44 +206,20 @@ def read_winds(years,var,dom):
 
 scratchpath="/work/scratch-pw2/emmah/eval/"
 import pickle
-def main(MC12_years,MC2_years,scratchpath,figname,calc=False):
-#  P12,Pobs12 = read_data("rainfall")
-#  P2,Pobs2 = read_data("rainfall")
-  u12,uobs12 = read_winds(MC12_years,"eastward_wind","MC12")
-  u2,uobs2 = read_winds(MC2_years,"eastward_wind","MC2")
-  calc_MC2,calc_MC12 = True,True
-  if not calc:
-    MC12_years_read,correl_u850_12,correlx_u850_12,correlt_u850_12 = pickle.load(open(scratchpath+"MC12_correl_u_850.pickle","rb"))
-    MC12_years_read,correl_u200_12,correlx_u200_12,correlt_u200_12 = pickle.load(open(scratchpath+"MC12_correl_u_200.pickle","rb"))
-    MC2_years_read,correl_u850_2,correlx_u850_2,correlt_u850_2 = pickle.load(open(scratchpath+"MC2_correl_u_850.pickle","rb"))
-    MC2_years_read,correl_u200_2,correlx_u200_2,correlt_u200_2 = pickle.load(open(scratchpath+"MC2_correl_u_200.pickle","rb"))
-#    if len(MC12_years_read)==len(MC12_years):
-#      if (MC12_years_read==MC12_years).all():
-#        calc_MC12 = False
-#    if len(MC2_years_read)==len(MC2_years):
-#      if (MC2_years_read==MC2_years).all():
-#        calc_MC2 = False
-  if calc_MC12:
-#    correl_P,correlx_P,correlt_P = band_regress(P12[:,:90],Pobs12[:,:])
-#    pickle.dump((correl_P,correlx_P,correlt_P),open(scratchpath+"correl_P.pickle","wb"))
-    correl_u850_x,correlx_u850_x,correlt_u850_x = band_regress(u12[:,:,1],u2[:,:,1])
-    correl_u200_x,correlx_u200_x,correlt_u200_x = band_regress(u12[:,:,1],u2[:,:,1])
-    pickle.dump((MC12_years,correl_u850_x,correlx_u850_x,correlt_u850_x),open(scratchpath+"MCX_correl_u_850.pickle","wb"))
-    pickle.dump((MC12_years,correl_u200_x,correlx_u200_x,correlt_u200_x),open(scratchpath+"MCX_correl_u_200.pickle","wb"))
-#    correl_u850_12,correlx_u850_12,correlt_u850_12 = band_regress(u12[:,:,1],uobs12[:,:,0])
-#    pickle.dump((MC12_years,correl_u850_12,correlx_u850_12,correlt_u850_12),open(scratchpath+"MC12_correl_u_850.pickle","wb"))
-#    correl_u200_12,correlx_u200_12,correlt_u200_12 = band_regress(u12[:,:90,0],uobs12[:,:,1])
-#    pickle.dump((MC12_years,correl_u200_12,correlx_u200_12,correlt_u200_12),open(scratchpath+"MC12_correl_u_200.pickle","wb"))
-  if calc_MC2:
-  #  correl_u850_2,correlx_u850_2,correlt_u850_2 = band_regress(u2[:,:,1],uobs2[:,:,0])
-  #  pickle.dump((MC2_years,correl_u850_2,correlx_u850_2,correlt_u850_2),open(scratchpath+"MC2_correl_u_850.pickle","wb"))
-    correl_u200_2,correlx_u200_2,correlt_u200_2 = band_regress(u2[:,:90,0],uobs2[:,:,1])
-    pickle.dump((MC2_years,correl_u200_2,correlx_u200_2,correlt_u200_2),open(scratchpath+"MC2_correl_u_200.pickle","wb"))
-  fig=plot({#"precip":[correl_P,correlx_P,correlt_P],
-        "u850":[correl_u850_2,correlx_u850_2,correlt_u850_2],
-        "u200":[correl_u200_2,correlx_u200_2,correlt_u200_2] },
-       {#"precip":[correl_P,correlx_P,correlt_P],
-        "u850":[correl_u850_12,correlx_u850_12,correlt_u850_12],
-        "u200":[correl_u200_12,correlx_u200_12,correlt_u200_12] })
+def main(MC2_years,scratchpath,figname):
+#  P12,Pobs = read_data("rainfall")
+  u2,uobs = read_winds(MC2_years,"eastward_wind")
+  import pdb;pdb.set_trace()
+#  correl_P,correlx_P,correlt_P = band_regress(P12[:,:90],Pobs[:,:])
+#  pickle.dump((correl_P,correlx_P,correlt_P),open(scratchpath+"correl_P.pickle","wb"))
+  correl_u850,correlx_u850,correlt_u850 = band_regress(u2[:,1],uobs[:,0])
+  pickle.dump((correl_u850,correlx_u850,correlt_u850),open(scratchpath+"MC2_correl_u_850.pickle","wb"))
+#  correl_u850,correlx_u850,correlt_u850 = pickle.load(open(scratchpath+"correl_u_850.pickle","rb"))
+  correl_u200,correlx_u200,correlt_u200 = band_regress(u2[:90,0],uobs[:,1])
+  pickle.dump((correl_u200,correlx_u200,correlt_u200),open(scratchpath+"MC2_correl_u_200.pickle","wb"))
+#  correl_u200,correlx_u200,correlt_u200 = pickle.load(open(scratchpath+"correl_u_200.pickle","rb"))
+  plot({#"precip":[correl_P,correlx_P,correlt_P],
+        "u850":[correl_u850,correlx_u850,correlt_u850],
+        "u200":[correl_u200,correlx_u200,correlt_u200] })
   plt.savefig(figname)
-  plt.show() 
+  

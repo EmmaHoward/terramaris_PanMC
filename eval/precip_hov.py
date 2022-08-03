@@ -18,7 +18,7 @@ def add_day_of_month_float(cube, coord, name='dom'):
 
 MC2_path = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/precip/"
 	
-cx = iris.Constraint(longitude=lambda x:90<=x<=150)
+cx = iris.Constraint(longitude=lambda x:90<=x<=155)
 cy = iris.Constraint(latitude=lambda y:-15<=y<=15)
 
 names = ["MC2","MC12","GPM"]
@@ -30,8 +30,9 @@ def calc(year,month,scratchpath):
   out = iris.cube.CubeList()
   dates = [dt.datetime(year,month,1)+dt.timedelta(i) for i in range(nday[month])]
   P12 = panMC(year,"MC12","rainfall").load_iris(dates,variables=["stratiform_rainfall_amount","convective_rainfall_amount"])
-  P12 = (P12[0]+P12[1]+P12[2]+P12[3]).extract(cx&cy)
-  P2=iris.load(MC2_path+"%04d%02d_hourly_coarsened_rainfall.nc"%(year+int(month<6),month))[0]*4
+  P12 = (P12[0]+P12[1]).extract(cx&cy)
+  ct = iris.Constraint(time=lambda t: t.point.year==year and t.point.month==month)
+  P2=iris.load(MC2_path+"%04d%02d_hourly_coarsened_rainfall.nc"%(year+int(month<6),month),ct)[0]*4
 #  P2 = panMC(year,"MC2-tmp","rainfall").load_iris(dates,variables=["stratiform_rainfall_amount"])[0]*4
   TRMM_hr = iris.load(["/gws/nopw/j04/klingaman/datasets/GPM_IMERG/half_hourly/{0}/{0}{1:02d}/3B-HHR.MS.MRG.3IMERG.{0}{1:02d}{2:02d}-*.nc".format(year,month,i) for i in range(1,32)],cx&cy)
   TRMM_hr = TRMM_hr.concatenate_cube()
@@ -49,6 +50,7 @@ def plot(year,month,scratchpath,figname):
     data=iris.load(scratchpath+"precip_hov_%04d%02d.nc"%(year,month))
   else:
     calc(year,month,scratchpath)
+    data=iris.load(scratchpath+"precip_hov_%04d%02d.nc"%(year,month))
   lon_12 = data.extract("MC12_N")[0].coord("longitude").points
   cmap=cmap_discretise(cmocean.cm.rain,12)
   fig,axs=plt.subplots(3,3,figsize=(6.5,8),sharex="all",sharey="all")
@@ -62,10 +64,10 @@ def plot(year,month,scratchpath,figname):
       if name != "MC2":
         add_hour(cube,"time","hour")
         add_day_of_year(cube,"time","doyr")
+        cube = cube.aggregated_by(['hour',"doyr"],iris.analysis.MEAN)
       if name == "MC12":
         cube = cube*4
       add_day_of_month_float(cube,"time","dom")
-      cube = cube.aggregated_by(["hour","doyr"],iris.analysis.MEAN)
       cube.coord("time").convert_units("days since %04d-%02d-01"%(year,month))
       print(cube.coord("time").units)
 
@@ -84,5 +86,4 @@ def plot(year,month,scratchpath,figname):
   cax=fig.add_axes([0.85,0.3,0.05,0.4])
   fig.colorbar(a,cax=cax)
   fig.savefig(figname)
-  plt.show()
 

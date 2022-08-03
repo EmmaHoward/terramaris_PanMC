@@ -16,7 +16,10 @@ cx = iris.Constraint(longitude = lambda x: 84 < x < 161)
 cy = iris.Constraint(latitude  =  lambda y: -21 < y < 21)
 
 def load(year,MC,path):
-  data=iris.load([path+"%04d%02d_diurnal_precip.nc"%(year+int(month<6),month) for month in [12,1,2]])
+  if MC =="MC2":
+    data=iris.load([path+"%04d%02d_diurnal_precip_coarsened.nc"%(year+int(month<6),month) for month in [12,1,2]])
+  else:
+    data=iris.load([path+"%04d%02d_diurnal_precip.nc"%(year+int(month<6),month) for month in [12,1,2]])
   equalise_attributes(data)
   data=data.concatenate()
   if MC=="MC12":
@@ -53,10 +56,11 @@ def load_all(years12,years2):
   for year in years2:
     P2.append(load(year,"MC2",MC2_path))
     P2[-1].coord("time").convert_units("hours since 2003-11-01 00:00:00")
+  equalise_attributes(P2)
   P12 = P12.concatenate_cube()
   P2 = P2.concatenate_cube()
   Pref = Pref.concatenate_cube()
-  P2 = P2.regrid(P12,iris.analysis.AreaWeighted())
+  P2 = P2.regrid(P12,iris.analysis.AreaWeighted(mdtol=0.5))
   return P12,P2,Pref
 
 
@@ -73,5 +77,4 @@ def main(years12,years2,figname=None):
     fig.suptitle("Precipitation (mm/day)")
     fig.tight_layout()
     fig.savefig(figname)
-    plt.show()
 

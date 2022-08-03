@@ -30,7 +30,6 @@ MC2_path = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/pre
 
 ref_path = "/gws/nopw/j04/klingaman/datasets/GPM_IMERG/monthly/"
 
-from iris.coord_categorisation import add_hour,add_month
 
 def add_time_of_day(cube, coord, name='hour'):
     def _time_of_day(coord, value):
@@ -101,9 +100,9 @@ def plot(years12,years2,figname):
   amp12,peak12,mean12 = diurnal_amp_peak(P12)
   amp2,peak2,mean2 = diurnal_amp_peak(P2)
   peak_2  = peak2.copy()
-  peak_2.data =np.ma.masked_array(peak_2.data,(amp2.data<1)+(mean2.data<5))
+  peak_2.data =np.ma.masked_array(peak_2.data,(amp2.data<1)+(mean2.data<2.5))
   peak_12  = peak12.copy()
-  peak_12.data =np.ma.masked_array(peak_12.data,(amp12.data<1)+(mean12.data<5))
+  peak_12.data =np.ma.masked_array(peak_12.data,(amp12.data<1)+(mean12.data<2.5))
 #
   diff = peak_2 - peak_12.regrid(peak_2,iris.analysis.Linear())
   diff = diff.data%24
@@ -111,17 +110,16 @@ def plot(years12,years2,figname):
   diff = peak_2.copy(data=diff)
 #
   diff_sst= sst2_range-sst12_range.regrid(sst2_range,iris.analysis.Nearest())
-  cmap1 = ListedColormap(sns.color_palette("turbo",12))
+  cmap1h@ = ListedColormap(sns.color_palette("turbo",12))
   cmap2 = ListedColormap(sns.color_palette('twilight_shifted',12))
   cmap3=ListedColormap(sns.color_palette("viridis",8))
   cmap4=ListedColormap(sns.color_palette("bwr",9))
-
   fig=plt.figure(figsize=(10,5))
   
   ax,p = [],[]
   for i,(cube,cmap,vmin,vmax,title,extend) in enumerate([(peak_2    ,cmap1,  0,24  ,"MC2 Hour of Max Precipitation",None),
                                      (peak_12    ,cmap1,  0,24,  "MC12 Hour of Max Precipitation",None),
-                                     (diff       ,cmap4,-6.75,6.75,  "MC2 - MC12: Hour of Max Precipitation","Both"),
+                                     (diff       ,cmap4,-6,6,  "MC12 - MC12: Hour of Max Precipitation","Both"),
                                      (sst2_range ,cmap3,  0,0.8, "MC2 Diurnal SST Range",None),
                                      (sst12_range,cmap3,  0,0.8,  "MC12 Diurnal SST Range",None),
                                      (diff_sst   ,cmap4,-0.225,0.225,"MC2 - MC12 Diurnal SST Range",None)]):
@@ -143,10 +141,11 @@ def plot(years12,years2,figname):
   fig.colorbar(p[4],ax=ax[4],ticks=np.arange(0,.81,0.2),orientation="horizontal")
   fig.colorbar(p[5],ax=ax[5],ticks=np.arange(-0.2,0.21,0.1),orientation="horizontal")
   c=fig.colorbar(p[2],ax=ax[2],ticks=np.arange(-6,7,3),orientation="horizontal")
-  c.set_ticklabels(["Late"]+list(range(-3,6,3))+["Early"])
+  c.set_ticklabels(["Late"]+list(range(-8,9,4))+["Early"])
   fig.subplots_adjust(top=0.964,bottom=0.048,left=0.026,right=0.967,hspace=0.125,wspace=0.136)
   fig.savefig(figname)
-#  plt.show()
+  plt.show()
+  import pdb;pdb.set_trace()
 
 
 if __name__ == "__main__":

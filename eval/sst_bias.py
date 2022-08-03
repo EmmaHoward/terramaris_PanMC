@@ -15,7 +15,7 @@ ref_path = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/kpp_relaxation/"
 sst12 = iris.cube.CubeList()
 sstref = iris.cube.CubeList()
 
-cx = iris.Constraint(longitude=lambda lon: 90<=lon<=155)
+cx = iris.Constraint(longitude=lambda lon: 90.5<=lon<=154.5)
 cy = iris.Constraint(latitude=lambda lat: -15<=lat<=15)
 
 def load(year,MC):
@@ -31,7 +31,17 @@ def load_ref(year,path,scratchpath=None,regen=False):
     mean = iris.load(path+"/monthlymean/"+outname)[0]
   else:
     data = iris.load(path+"%04d/%04d_00???_temperature_relax.nc"%(year,year))
-    data = iris.cube.CubeList([cube[:-1] for cube in data if cube.shape[0]==7]).concatenate_cube()
+    times,tmp = [],iris.cube.CubeList()
+    for cube in data:
+      if "t" in [c.name() for c in cube.coords()]:
+        time = cube.coord("t").units.num2date(cube.coord("t").points)
+      else:
+        time = cube.coord("time").units.num2date(cube.coord("time").points)
+      for i,t in enumerate(time):
+        if t not in times:
+           tmp.append(cube[i])
+           times.append(t)
+    data = tmp.merge_cube()
     [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
     data.coord("t").rename("time")
     add_month(data,"time","month")  
@@ -45,7 +55,6 @@ def daily_mean(year,MC):
   outname = "%s_%04d%02d_daily_sea_temperature.nc"%(MC,year,(year+1)%100)
   print(year)
   dmean = iris.load(path.format(MC)+outname)[0]
-  import pdb;pdb.set_trace()
   return dmean
 
 def load_ref_surf(year,path,level):
@@ -81,7 +90,7 @@ def calc_mse(year,MC,level,scratchpath,regen=False):
      return mse
   else:
     ct= iris.Constraint(time = lambda t: t.point.month in [12,1,2] and not (t.point.month,t.point.day)==(2,29))
-    model =  daily_mean(year,MC)
+    model =  daily_mean(year,MC)[:,level]
     ref = load_ref_surf(year,ref_path,level).extract(ct)
 
     ref.coord("longitude").var_name=None
@@ -115,7 +124,12 @@ def combine_rmse(years,MC,level,scratchpath,regen=False):
    mse[-1].add_aux_coord(yc)
    adjust_doyr(mse[-1])
    mse[-1].remove_coord("time")
+   if "depth" in [c.name() for c in mse[-1].coords()]:
+     mse[-1].remove_coord("depth")
    iris.util.promote_aux_coord_to_dim_coord(mse[-1],"doyr")
+   for coord in mse[-1].coords():
+     if coord.name() in ['longitude','latitude']:
+       coord.long_name=None
  mse = mse.merge_cube()
  if mse.ndim == 2:
    rmse = mse.collapsed("year",iris.analysis.MEAN)**0.5
@@ -140,6 +154,8 @@ def load_all(years12,years2,scratchpath=None,regen=False):
   for cube in sst12+sst2:
     for x in cube.coords():
       x.var_name=None
+  for cube in sst12+sstref:
+    cube.remove_coord("month")
   sst12=sst12.concatenate_cube()
   sst2=sst2.concatenate_cube()
   #sst12=sst12.concatenate_cube().aggregated_by("month",iris.analysis.MIN).collapsed("time",iris.analysis.MEAN)
@@ -149,9 +165,30 @@ def load_all(years12,years2,scratchpath=None,regen=False):
   sst2.data.mask += sst2.data<=2
   return sst12,sst2,sstref
  
+
+def rmse_new():
+  MC12 = iris.load_cube("/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/sst/MC12_clim_daily_sea_temperature.nc",cx&cy)
+  MC2 =  iris.load_cube("/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/sst/MC2_clim_daily_sea_temperature.nc",cx&cy)
+  ref = iris.load_cube("/home/users/emmah/eval/clim_reference_sst.nc",cx&cy)
+  ref.coord("longitude").bounds=None
+  ref.coord("latitude").bounds=None
+  ref=ref.extract(cx&cy)
+  ref.remove_coord('time')
+  MC2.remove_coord('time')
+  ref.add_dim_coord(MC12.coord('time'),0)
+  MC2.add_dim_coord(MC12.coord('time'),0)
+  MC12.data.mask += MC12.data < 5
+  MC2.data.mask += MC2.data < 5
+  ref.data = np.ma.masked_array(ref.data,ref.data==0)
+  import pdb;pdb.set_trace()
+  rmse_MC12 = ((MC12 - ref)**2).collapsed(['longitude','latitude'],iris.analysis.MEAN)**0.5
+  rmse_MC2 = ((MC2 - ref)**2).collapsed(['longitude','latitude'],iris.analysis.MEAN)**0.5
+  return rmse_MC12,rmse_MC2
+
 def main(years12,years2,scratchpath,figname=None,regen=False):
-  mse12, rmse12 = combine_rmse(years12,"MC12",5,scratchpath,regen=regen)
-  mse2, rmse2 = combine_rmse(years2,"MC2",5,scratchpath,regen=regen)
+#  mse12, rmse12 = combine_rmse(years12,"MC12",5,scratchpath,regen=regen)
+#  mse2, rmse2 = combine_rmse(years2,"MC2",5,scratchpath,regen=regen)
+  rmse12,rmse2 = rmse_new()
   sst12,sst2,sstref = load_all(years12,years2,scratchpath,regen)
   if not figname is None:
     ct=iris.Constraint(time=lambda t:t.point.month in [12,1,2])
@@ -192,13 +229,15 @@ def main(years12,years2,scratchpath,figname=None,regen=False):
     ax = fig.add_axes([0.07,0.07,0.5,0.2])
     ax.set_xticks([365-31,365-16,365+1,365+15,365+31,365+31+15,365+31+28])
     ax.set_xticklabels(["1-Dec","15-Dec","1-Jan","15-Jan","1-Feb","15-Feb","28-Feb"])
-    iplt.plot(rmse12,label="MC12",axes=ax,c="k")
-    iplt.plot(rmse2,label="MC2",axes=ax,c="b")
-    [iplt.plot(mse12[i]**0.5,axes=ax,label=year,c="0.5",lw=1) for i,year in enumerate(years12)]
+    plt.plot(np.arange(365-31,365-31+90,1),rmse12.data,label="MC12",axes=ax,c="k")
+    plt.plot(np.arange(365-31,365-31+90,1),rmse2.data,label="MC2",axes=ax,c="b")
+    plt.grid()
+    #[iplt.plot(mse12[i]**0.5,axes=ax,label=year,c="0.5",lw=1) for i,year in enumerate(years12)]
     ax.set_title("RMSE Error")
+    plt.legend() 
     #ax.set_xlim(365-31,365+31+28)
     fig.savefig(figname)
-    import pdb;pdb.set_trace()
+    plt.show()
 
 if __name__=="__main__":
   main(MC12_years,"/work/scratch-pw2/emmah/eval/","/home/users/emmah/eval_figs/sst_bias.png",regen=False)

@@ -95,62 +95,69 @@ def load_sst(years12,years2):
 def plot(years12,years2,figname):
   P2,P12 = load_precip(years12,years2)
   P2 = P2.regrid(P12,iris.analysis.AreaWeighted())
-  sst2,sst12 = load_sst(years12,years2)
-  sst2_range = sst2.collapsed("hour",iris.analysis.MAX) - sst2.collapsed("hour",iris.analysis.MIN)
-  sst12_range = sst12.collapsed("hour",iris.analysis.MAX) - sst12.collapsed("hour",iris.analysis.MIN)
+#  sst2,sst12 = load_sst(years12,years2)
+#  sst2_range = sst2.collapsed("hour",iris.analysis.MAX) - sst2.collapsed("hour",iris.analysis.MIN)
+#  sst12_range = sst12.collapsed("hour",iris.analysis.MAX) - sst12.collapsed("hour",iris.analysis.MIN)
+  GPM = iris.load_cube("/work/scratch-pw2/emmah/gpm_diurnal.nc")
+  GPM.data = GPM.data[:,::-1]
+  GPM.convert_units(P2.units)
   amp12,peak12,mean12 = diurnal_amp_peak(P12)
   amp2,peak2,mean2 = diurnal_amp_peak(P2)
+  ampref,peakref,meanref = diurnal_amp_peak(GPM)
   peak_2  = peak2.copy()
   peak_2.data =np.ma.masked_array(peak_2.data,(amp2.data<1)+(mean2.data<5))
   peak_12  = peak12.copy()
   peak_12.data =np.ma.masked_array(peak_12.data,(amp12.data<1)+(mean12.data<5))
+  peak_ref = peakref.copy()
+  peak_ref.data = np.ma.masked_array(peakref.data,(ampref.data<1)+(meanref.data<5))
 #
   diff = peak_2 - peak_12.regrid(peak_2,iris.analysis.Linear())
   diff = diff.data%24
   diff[diff>12] = diff[diff>12] - 24
   diff = peak_2.copy(data=diff)
 #
-  diff_sst= sst2_range-sst12_range.regrid(sst2_range,iris.analysis.Nearest())
+#  diff_sst= sst2_range-sst12_range.regrid(sst2_range,iris.analysis.Nearest())
   cmap1 = ListedColormap(sns.color_palette("turbo",12))
   cmap2 = ListedColormap(sns.color_palette('twilight_shifted',12))
   cmap3=ListedColormap(sns.color_palette("viridis",8))
   cmap4=ListedColormap(sns.color_palette("bwr",9))
 
-  fig=plt.figure(figsize=(10,5))
+  fig=plt.figure(figsize=(10,3))
   
   ax,p = [],[]
   for i,(cube,cmap,vmin,vmax,title,extend) in enumerate([(peak_2    ,cmap1,  0,24  ,"MC2 Hour of Max Precipitation",None),
                                      (peak_12    ,cmap1,  0,24,  "MC12 Hour of Max Precipitation",None),
-                                     (diff       ,cmap4,-6.75,6.75,  "MC2 - MC12: Hour of Max Precipitation","Both"),
-                                     (sst2_range ,cmap3,  0,0.8, "MC2 Diurnal SST Range",None),
-                                     (sst12_range,cmap3,  0,0.8,  "MC12 Diurnal SST Range",None),
-                                     (diff_sst   ,cmap4,-0.225,0.225,"MC2 - MC12 Diurnal SST Range",None)]):
-    ax.append(plt.subplot(2,3,1+i,projection=ccrs.PlateCarree()))
+                                     (peak_ref   ,cmap1,  0,24,  "GPM Hour of Max Precipitation",None)]):
+              #                       (diff       ,cmap4,-6.75,6.75,  "MC2 - MC12: Hour of Max Precipitation","Both"),
+              #                       (sst2_range ,cmap3,  0,0.8, "MC2 Diurnal SST Range",None),
+              #                       (sst12_range,cmap3,  0,0.8,  "MC12 Diurnal SST Range",None),
+              #                       (diff_sst   ,cmap4,-0.225,0.225,"MC2 - MC12 Diurnal SST Range",None)]):
+    ax.append(plt.subplot(1,3,1+i,projection=ccrs.PlateCarree()))
     ax[-1].coastlines()
     plt.xlim(90,155)
     plt.ylim(-15,15)
     p.append(iplt.pcolormesh(cube,vmin=vmin,vmax=vmax,cmap=cmap))
     plt.title(title)
 #
-  mask = diff.copy(data=np.ma.masked_array(np.ones(diff.shape)))
-  mask.data.mask = (diff.data <6)*(diff.data>-6)
-  mask.data.mask += peak_12.data.mask
-  iplt.pcolormesh(mask,axes=ax[2],cmap="binary",vmin=0,vmax=2)
+#  mask = diff.copy(data=np.ma.masked_array(np.ones(diff.shape)))
+#  mask.data.mask = (diff.data <6)*(diff.data>-6)
+#  mask.data.mask += peak_12.data.mask
+#  iplt.pcolormesh(mask,axes=ax[2],cmap="binary",vmin=0,vmax=2)
 
-  fig.colorbar(p[0],ax=ax[0],ticks=np.arange(0,25,4),orientation="horizontal")
-  fig.colorbar(p[1],ax=ax[1],ticks=np.arange(0,25,4),orientation="horizontal")
-  fig.colorbar(p[3],ax=ax[3],ticks=np.arange(0,.81,0.2),orientation="horizontal")
-  fig.colorbar(p[4],ax=ax[4],ticks=np.arange(0,.81,0.2),orientation="horizontal")
-  fig.colorbar(p[5],ax=ax[5],ticks=np.arange(-0.2,0.21,0.1),orientation="horizontal")
-  c=fig.colorbar(p[2],ax=ax[2],ticks=np.arange(-6,7,3),orientation="horizontal")
-  c.set_ticklabels(["Late"]+list(range(-3,6,3))+["Early"])
-  fig.subplots_adjust(top=0.964,bottom=0.048,left=0.026,right=0.967,hspace=0.125,wspace=0.136)
+  fig.colorbar(p[0],ax=ax,ticks=np.arange(0,25,4),orientation="horizontal")
+#  fig.colorbar(p[1],ax=ax[1],ticks=np.arange(0,25,4),orientation="horizontal")
+#  fig.colorbar(p[3],ax=ax[3],ticks=np.arange(0,.81,0.2),orientation="horizontal")
+#  fig.colorbar(p[4],ax=ax[4],ticks=np.arange(0,.81,0.2),orientation="horizontal")
+#  fig.colorbar(p[5],ax=ax[5],ticks=np.arange(-0.2,0.21,0.1),orientation="horizontal")
+#  c=fig.colorbar(p[2],ax=ax[2],ticks=np.arange(-6,7,3),orientation="horizontal")
+#  c.set_ticklabels(["Late"]+list(range(-3,6,3))+["Early"])
+#  fig.subplots_adjust(top=0.964,bottom=0.048,left=0.026,right=0.967,hspace=0.125,wspace=0.136)
+  fig.subplots_adjust(top=0.95,bottom=0.35,left=0.015,right=0.985,hspace=0.2,wspace=0.048)
   fig.savefig(figname)
-#  plt.show()
+  plt.show()
 
-
+years= [2003,2005,2007,2009,2012,2014,2015,2016,2017,2018]
 if __name__ == "__main__":
-  plot([2015,2016],"/home/users/emmah/eval_figs/diurnal_cycle.png")
-
+  plot(years,years,"/home/users/emmah/eval_figs/diurnal_cycle_new.png")
 
 

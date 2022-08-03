@@ -30,24 +30,35 @@ def compute_seas_mean(year,domain):
 
 #for year in years[:1]:
 #  compute_seas_mean(year,"MC12")
-compute_seas_mean(2007,"MC12")
-
+#compute_seas_mean(2007,"MC12")
 
 def load(years):
-  era5 = iris.load(["/gws/nopw/j04/terramaris/emmah/era5/*vert_%04d12.nc"%year for year in years]+\
-                 ["/gws/nopw/j04/terramaris/emmah/era5/*vert_%04d0?.nc"%(year+1) for year in years],cx&cy&cz2).extract(["eastward_wind","northward_wind"])
-  iris.util.equalise_attributes(era5)
-  era5=era5.concatenate()
+  ymon = []
+  for year in years:
+    ymon +=[(year,12),(year+1,1),(year+1,2)]
+  ct = iris.Constraint(time=lambda t: (t.point.year,t.point.month) in ymon)
+  era5 = iris.load("/gws/nopw/j04/terramaris/emmah/era5/era5_monthly_means.nc",ct&cz2)
   era5 = iris.cube.CubeList([cube.rolling_window("time",iris.analysis.MEAN,3)[::3] for cube in era5])
+  data = iris.cube.CubeList()
+  domain="MC2"
+  for i,year in enumerate(years):
+    data+=iris.load("/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/monmean_pl/%s_monmean_pl_%d.nc"%(domain,year),cz).extract(["eastward_wind","northward_wind"])
+  for cube in data:
+    cube.coord("time").convert_units("days since 2003-01-01")
+  data = iris.cube.CubeList([cube.collapsed("time",iris.analysis.MEAN) for cube in data])
+  iris.util.equalise_attributes(data)
+  data2 = data.merge()
   data = iris.cube.CubeList()
   domain="MC12"
   for i,year in enumerate(years):
-    data+=iris.load("/work/scratch-pw2/emmah/%s_850wind_%d.nc"%(domain,year))
+    print(i)
+    data+=iris.load("/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/monmean_pl/%s_monmean_pl_%d.nc"%(domain,year),cz).extract(["eastward_wind","northward_wind"])
   for cube in data:
-    cube.remove_coord("forecast_reference_time")
     cube.coord("time").convert_units("days since 2003-01-01")
-  data = data.merge()
-  return era5,data
+  data = iris.cube.CubeList([cube.collapsed("time",iris.analysis.MEAN) for cube in data])
+  iris.util.equalise_attributes(data)
+  data12 = data.merge()
+  return era5,data12,data2
 
 def std_plot_1d(data,ax,std_max,mean_ticks,k=None):
   std = data.collapsed("time",iris.analysis.STD_DEV)
@@ -72,27 +83,40 @@ def diff_plot(data,P,ax,k):
   u = data.extract("eastward_wind")[0]
   v = data.extract("northward_wind")[0]
   ax.coastlines()
-  a=iplt.contourf(P[0]-P[1],np.linspace(-11,11,12),cmap="bwr_r")
-  q=iplt.quiver((u[0]-u[1])[::k,::k],(v[0]-v[1])[::k,::k],scale=100,pivot="mid",color="0.2")
+  a=iplt.contourf(P[0]-P[1],np.linspace(-11,11,12),cmap="bwr_r",extend='both')
+  q=iplt.quiver((u[0]-u[1])[::k,::k],(v[0]-v[1])[::k,::k],scale=100,pivot="mid",color="0.2",headwidth=5)
   plt.quiverkey(q,0.9,-0.2,1,"1m/s")
   plt.plot([90,155,155,90,90],[-15,-15,15,15,-15],"k",lw=1)
-  plt.colorbar(a)
+  plt.colorbar(a,ticks=np.arange(-10,11,4))
   plt.xlim(85,160)
   plt.ylim(-20,20)
-  return a
-
-
-if 1:
-  ax=plt.subplot(311,projection=ccrs.PlateCarree())
   ax.coastlines()
   plt.plot([90,155,155,90,90],[-15,-15,15,15,-15],"k",lw=1)
   plt.xlim(85,160)
   plt.ylim(-20,20)
-  ax2=plt.subplot(312,projection=ccrs.PlateCarree())
-  a=diff_plot(MC12,P12,ax2,20)
-  ax3=plt.subplot(313,projection=ccrs.PlateCarree())
-  a=diff_plot(era5,Pref,ax3,9)
+  return a
 
+def plot(years,figpath,fig):
+  era5,MC12,MC2=load(years)
+  P12,P2,Pref = precip_bias.load_all(years,years)
+  P12=iris.cube.CubeList([P12[:144].collapsed("time",iris.analysis.MEAN),P12[144:].collapsed("time",iris.analysis.MEAN)]).merge_cube()
+  P2=iris.cube.CubeList([P2[:144].collapsed("time",iris.analysis.MEAN),P2[144:].collapsed("time",iris.analysis.MEAN)]).merge_cube()
+  Pref=iris.cube.CubeList([Pref[:3].collapsed("time",iris.analysis.MEAN),Pref[3:].collapsed("time",iris.analysis.MEAN)]).merge_cube()
+#  plt.figure(figsize=(5,8))
+  ax1=plt.subplot(322,projection=ccrs.PlateCarree())
+  plt.title("MC2")
+  a=diff_plot(MC2,P2,ax1,20)
+  ax2=plt.subplot(324,projection=ccrs.PlateCarree())
+  plt.title("MC12")
+  a=diff_plot(MC12,P12,ax2,20)
+  ax3=plt.subplot(326,projection=ccrs.PlateCarree())
+  plt.title("Reference")
+  a=diff_plot(era5,Pref,ax3,9)
+  plt.savefig(figpath)
+  plt.show()
+
+
+"""
   import pdb;pdb.set_trace()
   fig=plt.figure(figsize=(9,9))
 
@@ -127,8 +151,6 @@ if 1:
   fig.colorbar(a,cax=cax1)#,orientation="horizontal")
   fig.colorbar(b,cax=cax2)#,orientation="horizontal")
   fig.colorbar(c,cax=cax3)#,orientation="horizontal")
-  fig.savefig(figname)
   plt.show()
 
-
-
+"""

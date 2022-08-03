@@ -18,7 +18,8 @@ import datetime as dt
 cy=iris.Constraint(latitude=lambda y:-15<=y<=2)
 
 MC12_years = [2003,2007,2014,2015,2016,2017,2018]
-MC12_path = "/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/monthly_diurnal_sst/"
+MC12_path = "/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/sst/"
+MC2_path = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/sst/"
 ref_path = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/kpp_relaxation/"
 sst12 = iris.cube.CubeList()
 sstref = iris.cube.CubeList()
@@ -39,9 +40,9 @@ def load(year,MC,path,scratchpath=None):
   outname = "%s_%04d%02d_sst_diurnal_range.nc"%(MC,year,(year+1)%100)
   print(year)
   if 1:# os.path.exists(path+outname):
-#    print("exists")
-#    dcmean = iris.load(path+outname)
-#  else:
+    print("exists")
+    dcmean = iris.load(path+outname)
+  else:
     data=panMC(year,MC,"sea_water_temperature").load_iris()[0]
     [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
     data.coord("time").bounds = np.array([np.round(data.coord("time").points)-1,np.round(data.coord("time").points)]).T
@@ -105,41 +106,52 @@ def mjo_composites(phase,hmix,sst_m,sst_r,years,scratchpath):
   hmix_mjo,sst_r_mjo, sst_m_mjo = np.zeros((8,nx)),np.zeros((8,nx)),np.zeros((8,nx))
   for mjo_phase in range(1,9):
     dates2 =dates[dates==mjo_phase].index.date
-    hmix,sst_m,sst_r = load_kpp(years,"MC12",MC12_path,scratchpath)
+   # hmix,sst_m,sst_r = load_kpp(years,"MC12",MC12_path,scratchpath)
     ct = iris.Constraint(time=lambda t: dt.date(t.point.year,t.point.month,t.point.day) in dates2)
     hmix_mjo[mjo_phase-1] = hmix.extract(ct).collapsed("time",iris.analysis.MEAN).data
     sst_m_mjo[mjo_phase-1] = sst_m.extract(ct).collapsed("time",iris.analysis.MEAN).data
     sst_r_mjo[mjo_phase-1] = sst_r.extract(ct).collapsed("time",iris.analysis.MEAN).data
   return hmix_mjo,sst_m_mjo,sst_r_mjo
 
-def read_precip(scratchpath):
-  mean = iris.load(scratchpath+"MC12_mean_rain.nc",cy)[0]*4*24
+def read_precip(scratchpath,MC):
+  mean = iris.load(scratchpath+MC+"_mean_rain.nc",cy)[0]*{"MC2":4,"MC12":1}[MC]
   mask = iris.load("/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/invariants/land_binary_mask.nc",cy)[0]
   P = []
   for phase in range(1,9):
-    data=iris.load(scratchpath+"MC12_mjo_rain_phase%d.nc"%phase,cy)
-    data = (data[0]+data[1])*24*4
+    data=iris.load(scratchpath+MC+"_mjo_rmm_rain_phase%d.nc"%phase,cy)
+    if MC=="MC12":
+      data = (data.extract('convective_rainfall_amount')[0]+data.extract('stratiform_rainfall_amount')[0])*24*4
+    if MC=="MC2":
+      data = (data[0])*24*4
+      mask = mask.regrid(data,iris.analysis.Nearest())
+    data.units = mean.units
     cube = data-mean
-    P.append(np.ma.masked_array(data.data-mean.data,mask=mask.data).mean(axis=0))
+    P.append(np.ma.masked_array(data.data-mean.data,0*mask.data).mean(axis=0))
+    #P.append(np.array(data.data-mean.data).mean(axis=0))
   return np.ma.masked_array(P)
 
-def main(plottype,calc,scratchpath,figname=None):
+def main(plottype,calc,scratchpath,MC12_years,MC2_years,figname=None):
   #mjo=pd.read_csv('/home/users/emmah/reading/ivar/mjo.csv',index_col=0,names=['x0','x1','mag'],parse_dates=True,dayfirst=True)
   mjo = read_rmm()
   phase = mjo["mjo phase"]#np.ceil(((np.arctan2(mjo.x0,-mjo.x1))/(np.pi/4))%8)*(mjo.mag>=1)
-  hmix12,sst_m12,sst_r12 = load_kpp(MC12_years[:1],"MC12",MC12_path)
+  hmix12,sst_m12,sst_r12 = load_kpp(MC12_years[:1],"MC12",MC12_path,scratchpath=scratchpath)
+  hmix2,sst_m2,sst_r2 = load_kpp(MC12_years[:1],"MC2",MC2_path,scratchpath=scratchpath)
   if calc:
     hmix_mjo12,sst_m_mjo12,sst_r_mjo12 = mjo_composites(phase,hmix12,sst_m12,sst_r12,MC12_years,scratchpath)
-    pickle.dump((hmix_mjo12,sst_m_mjo12,sst_r_mjo12),open(scratchpath+"kpp_mjo.pickle","wb"))
+    pickle.dump((hmix_mjo12,sst_m_mjo12,sst_r_mjo12),open(scratchpath+"kpp_mjo_MC12.pickle","wb"))
+    hmix_mjo2,sst_m_mjo2,sst_r_mjo2 = mjo_composites(phase,hmix2,sst_m2,sst_r2,MC2_years,scratchpath)
+    pickle.dump((hmix_mjo2,sst_m_mjo2,sst_r_mjo2),open(scratchpath+"kpp_mjo_MC2.pickle","wb"))
   else:
-    (hmix_mjo12,sst_m_mjo12,sst_r_mjo12)=pickle.load(open(scratchpath+"kpp_mjo.pickle","rb"))
-  P_mjo12=read_precip(scratchpath)
+    (hmix_mjo12,sst_m_mjo12,sst_r_mjo12)=pickle.load(open(scratchpath+"kpp_mjo_MC12.pickle","rb"))
+    (hmix_mjo2,sst_m_mjo2,sst_r_mjo2)=pickle.load(open(scratchpath+"kpp_mjo_MC2.pickle","rb"))
+  P_mjo12=read_precip(scratchpath,'MC12')
+  P_mjo2=read_precip(scratchpath,"MC2")
   if not figname:
     return
   def smooth(data,n=50):
     return convolve(data,np.ones((1,n))/n)
 
-  fig=plt.figure(figsize=(10,4))
+  fig=plt.figure(figsize=(10,7))
   if plottype=="lines":
     lon = hmix12.coord("longitude").points
     with sns.color_palette("turbo", 8):
@@ -200,9 +212,52 @@ def main(plottype,calc,scratchpath,figname=None):
     def smooth(data,n=36):
       x=convolve(data,np.ones((1,n))/n)
       return np.array([interp1d(hmix12.coord("longitude").points,x[i])(np.arange(87.5,161,5)) for i in range(8)])
+    def smooth2(data,n=36,m1=False):
+      x=convolve(data,np.ones((1,n))/n)
+      if m1:
+        return np.array([interp1d(hmix2.coord("longitude").points[1:-1],x[i])(np.arange(92.5,156,5)) for i in range(8)])
+      return np.array([interp1d(hmix2.coord("longitude").points,x[i])(np.arange(92.5,156,5)) for i in range(8)])
     k=1
     lon = pcoloraxis(np.arange(87.5,161,5))
-    ax=plt.subplot(141)
+    lon2 = pcoloraxis(np.arange(92.5,156,5))
+    ax=plt.subplot(241)
+    plt.ylabel("MJO Phase")
+    plt.pcolormesh(lon2,np.arange(0.5,9),smooth2(sst_r_mjo2)[:,::k],vmin=-0.225,vmax=0.225,cmap=ListedColormap(sns.color_palette("RdGy_r",11)))
+    ax.set_yticks(np.arange(0.5,9),minor=True)
+    ax.yaxis.grid(True,which="minor")
+    ax.xaxis.grid(True)
+    plt.xlabel("Longitude")
+    plt.title("MC2 Diurnal SST Range")
+    plt.ylim(0.5,8.5)
+    plt.colorbar(orientation="horizontal",ticks=np.arange(-0.2,0.21,0.1))
+    ax=plt.subplot(242)
+    a=plt.pcolormesh(lon2,np.arange(0.5,9),smooth2(sst_m_mjo2)[:,::k],vmin=-0.45,vmax=0.45,cmap=ListedColormap(sns.color_palette("bwr",11)))
+    ax.set_yticks(np.arange(0.5,9),minor=True)
+    ax.yaxis.grid(True,which="minor")
+    ax.xaxis.grid(True)
+    plt.title("MC2 Foundational SST")
+    plt.xlabel("Longitude")
+    plt.ylim(0.5,8.5)
+    plt.colorbar(orientation="horizontal",ticks=np.arange(-0.4,0.5,0.2))
+    ax=plt.subplot(243)
+    plt.pcolormesh(lon2,np.arange(0.5,9),smooth2(P_mjo2[:],m1=True)[:,::k],vmin=-9,vmax=9,cmap=ListedColormap(sns.color_palette("BrBG",11)))
+    ax.set_yticks(np.arange(0.5,9),minor=True)
+    ax.yaxis.grid(True,which="minor")
+    ax.xaxis.grid(True)
+    plt.xlabel("Longitude")
+    plt.title("MC2 Precip over Ocean")
+    plt.ylim(0.5,8.5)
+    plt.colorbar(orientation="horizontal",ticks=np.arange(-8,9,2))
+    ax=plt.subplot(244)
+    plt.pcolormesh(lon2,np.arange(0.5,9),smooth2(hmix_mjo2)[:,::k],vmin=-11,vmax=11,cmap=ListedColormap(sns.color_palette("PiYG",13)))
+    ax.set_yticks(np.arange(0.5,9),minor=True)
+    ax.yaxis.grid(True,which="minor")
+    ax.xaxis.grid(True)
+    plt.ylim(0.5,8.5)
+    plt.xlabel("Longitude")
+    plt.title("MC2 Mixed Layer Depth")
+    plt.colorbar(orientation="horizontal",ticks=np.arange(-8,11,4))
+    ax=plt.subplot(245)
     plt.ylabel("MJO Phase")
     plt.pcolormesh(lon,np.arange(0.5,9),smooth(sst_r_mjo12)[:,::k],vmin=-0.225,vmax=0.225,cmap=ListedColormap(sns.color_palette("RdGy_r",11)))
     ax.set_yticks(np.arange(0.5,9),minor=True)
@@ -212,7 +267,7 @@ def main(plottype,calc,scratchpath,figname=None):
     plt.title("MC12 Diurnal SST Range")
     plt.ylim(0.5,8.5)
     plt.colorbar(orientation="horizontal",ticks=np.arange(-0.2,0.21,0.1))
-    ax=plt.subplot(142)
+    ax=plt.subplot(246)
     a=plt.pcolormesh(lon,np.arange(0.5,9),smooth(sst_m_mjo12)[:,::k],vmin=-0.45,vmax=0.45,cmap=ListedColormap(sns.color_palette("bwr",11)))
     ax.set_yticks(np.arange(0.5,9),minor=True)
     ax.yaxis.grid(True,which="minor")
@@ -221,7 +276,7 @@ def main(plottype,calc,scratchpath,figname=None):
     plt.xlabel("Longitude")
     plt.ylim(0.5,8.5)
     plt.colorbar(orientation="horizontal",ticks=np.arange(-0.4,0.5,0.2))
-    ax=plt.subplot(143)
+    ax=plt.subplot(247)
     plt.pcolormesh(lon,np.arange(0.5,9),smooth(P_mjo12[:])[:,::k],vmin=-9,vmax=9,cmap=ListedColormap(sns.color_palette("BrBG",11)))
     ax.set_yticks(np.arange(0.5,9),minor=True)
     ax.yaxis.grid(True,which="minor")
@@ -230,7 +285,7 @@ def main(plottype,calc,scratchpath,figname=None):
     plt.title("MC12 Precip over Ocean")
     plt.ylim(0.5,8.5)
     plt.colorbar(orientation="horizontal",ticks=np.arange(-8,9,2))
-    ax=plt.subplot(144)
+    ax=plt.subplot(248)
     plt.pcolormesh(lon,np.arange(0.5,9),smooth(hmix_mjo12)[:,::k],vmin=-11,vmax=11,cmap=ListedColormap(sns.color_palette("PiYG",13)))
     ax.set_yticks(np.arange(0.5,9),minor=True)
     ax.yaxis.grid(True,which="minor")
@@ -239,8 +294,10 @@ def main(plottype,calc,scratchpath,figname=None):
     plt.xlabel("Longitude")
     plt.title("MC12 Mixed Layer Depth")
     plt.colorbar(orientation="horizontal",ticks=np.arange(-8,11,4))
+
+
     plt.tight_layout()
-  plt.savefig(figname%plottype)
+  #plt.savefig(figname%plottype)
   plt.show()
 
-main("pcolor",True,"/work/scratch-pw2/emmah/eval/",figname="RMM_kpp_%s.png")
+#main("pcolor",True,"/work/scratch-pw2/emmah/eval/",figname="RMM_kpp_%s.png")
