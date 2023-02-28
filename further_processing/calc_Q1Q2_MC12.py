@@ -1,4 +1,9 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
+
+#
+# Calculate Yanai Q1 and Q2 heating terms for MC12
+# Emma's code, not Dan's update
+
 from subprocess import check_call
 import stratify
 import iris
@@ -7,7 +12,8 @@ from iris.util import equalise_attributes
 import numpy as np
 import datetime as dt
 from iris.aux_factory import HybridHeightFactory
-from iris.analysis import calculus_centred,calculus
+import calculus_centred
+from iris.analysis import calculus
 import os
 import sys
 
@@ -96,8 +102,8 @@ def exner_rho(date,mp1):
     rho.add_aux_factory(a)
   if date.day==1 and date.month==12:
     rho0 = rho[0]
-    rho0.coord("time").points = 720.5
-    rho0.coord("time").bounds = [[720,721]]
+    rho0.coord("time").points = rho0.coord("time").units.date2num(date.replace(hour=0,minute=30))
+    rho0.coord("time").bounds = [ rho0.coord("time").units.date2num([date.replace(hour=0,minute=0), date.replace(hour=1,minute=0)]) ]
     rho_roll = rho.rolling_window("time",iris.analysis.MEAN,2)
     rho_roll.data=rho_roll.data.astype("float32")
     rho0.cell_methods = rho_roll.cell_methods

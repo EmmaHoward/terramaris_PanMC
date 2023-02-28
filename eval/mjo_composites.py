@@ -1,3 +1,7 @@
+#
+# MJO phase rainfall composites (Figure 9)
+# 
+
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
 #SBATCH -p short-serial
 #SBATCH --array=[1-18]
@@ -118,14 +122,14 @@ def plot(scratchpath,figname,rmm=True):
     a=iplt.pcolormesh(data2-mean2,vmin=-11,vmax=11,cmap=cmap)
     plt.xlim(90,155)
     plt.ylim(-15,15)
-    plt.title("MC2 MJO Phase %d"%phase)
+    plt.title("(%s) MC2 MJO Phase %d"%('abcdijkl'[phase-1],phase))
     axs.append(ax)
     ax=plt.subplot(4,4,phase+4+4*(phase>4),projection=ccrs.PlateCarree())
     ax.coastlines()
     a=iplt.pcolormesh(data12-mean12,vmin=-11,vmax=11,cmap=cmap)
     plt.xlim(90,155)
     plt.ylim(-15,15)
-    plt.title("MC12 MJO Phase %d"%phase)
+    plt.title("(%s) MC12 MJO Phase %d"%('efghmnopq'[phase-1],phase))
     axs.append(ax)
   cax=fig.add_axes([0.3,0.1,0.4,0.05])
   fig.colorbar(a,cax=cax,orientation="horizontal",ticks=np.arange(-10,11,4))

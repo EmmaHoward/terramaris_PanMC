@@ -1,3 +1,8 @@
+#
+# plots figure 2: KPP heat and salt balances compared to driving model advection
+# outputs of "compute" function are provided in HSCorr.nc. These are the inputs to "plot" function
+#
+
 import cartopy.crs as ccrs
 import iris
 from panMC import panMC
@@ -17,12 +22,14 @@ relaxpath = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/relaxation_runs/"
 years = range(2003,2018)
 
 def ideg_to_m(cube):
+  # compute inverse of grid spacing in metres
   r = 6371000#cube.coord('latitude').coord_system.semi_major_axis
   y=cube.coord('latitude').points
   idx = iris.coords.AuxCoord(1./(r*np.cos(y*np.pi/180.0)),long_name='x map factor',units='m-1.rad')
   idy = iris.coords.AuxCoord(1./r,long_name='y map factor',units='m-1.rad')
   return idx,idy
 
+# kpp vertical grid spacing
 h = iris.coords.AuxCoord([ 1.278019, 1.29535, 1.313157, 1.331461, 1.350283, 1.369644, 1.389568,
     1.410081, 1.431208, 1.452978, 1.475421, 1.498568, 1.522452, 1.547111,
     1.572581, 1.598904, 1.626123, 1.654285, 1.683439, 1.71364, 1.744944,
@@ -34,6 +41,7 @@ h = iris.coords.AuxCoord([ 1.278019, 1.29535, 1.313157, 1.331461, 1.350283, 1.36
     5.096682, 5.38395, 5.705535, 6.067978, 6.479592, 6.951114, 7.496644,
     8.135098, 8.892416, 9.805218, 10.92685, 12.33824, 14.16832 ],units="m")  # KPP grid  spacing
 
+# kpp vertical coordinate
 z = iris.coords.AuxCoord([
     -0.6390094, -1.925694, -3.229947, -4.552257, -5.893128, -7.253092,
     -8.632697, -10.03252, -11.45317, -12.89526, -14.35946, -15.84645,
@@ -49,27 +57,31 @@ z = iris.coords.AuxCoord([
     -205.7225, -217.3551, -230.6084],units="m")  # KPP grid
 
 def cmems_mean_adv(year,path):
-#  if os.path.exists(path+"cmems_mean_adv_%d.nc"%year):
-#    data=iris.load(path+"cmems_mean_adv_%d.nc"%year)
-#    return(data)
+  # approximate heat and salt advection from nemo reanalysis mean state
   cz = iris.Constraint(depth=lambda d: d<=500)
+  # global constants
   rho_w=iris.coords.AuxCoord(997,units="kg/m3")
   cp_w= iris.coords.AuxCoord(4200,units="J/kg/K")
   print(year)
+  # load cmems data
   data=iris.load(path+"cmems_mom_uv_%04d.nc"%year,cz)
   new = iris.cube.CubeList()
   u = data.extract("eastward_sea_water_velocity")[0]
   v = data.extract("northward_sea_water_velocity")[0]
   T = data.extract("sea_water_potential_temperature")[0]
   S = data.extract("sea_water_salinity")[0]
+  # compute inverse grid spacing
   idx,idy=ideg_to_m(T[:,:,1:-1,1:-1])
+  # divergence of currents fields
   div = mul(D(u[:,:,1:-1],"longitude"),idx,2)+D(v[:,:,:,1:-1],"latitude")*idy
   div.rename("divergence")
   zc = u.coord("depth").points
+  # compute vertical motion from cotinuity equation
   w = [np.trapz(div.data[:,:i],zc[:i],axis=1) for i in range(1,1+len(zc))]
   w = np.ma.masked_array(w,div.data.mask)
   w = (div*div.coord("depth")).copy(data=w.transpose(1,0,2,3))
   w.rename("vertical_velocity")
+  # compute advection terms (u*spatial derivatives of T,S)
   udS  = mul(u[:,1:-1,1:-1,1:-1]*D(S[:,1:-1,1:-1],"longitude"),idx,2)
   vdS  =     v[:,1:-1,1:-1,1:-1]*D(S[:,1:-1,:,1:-1],"latitude")*idy
   wdS  =  -1*w[:,1:-1,:,:]*D(S[:,:,1:-1,1:-1],"depth")
@@ -78,6 +90,7 @@ def cmems_mean_adv(year,path):
   wdT  =  -1*w[:,1:-1,:,:]*D(T[:,:,1:-1,1:-1],"depth")
   Tadv = (udT+vdT+wdT)#.collapsed("time",iris.analysis.MEAN)
   Tadv = Tadv*rho_w*cp_w
+  # set metadata
   del Tadv.coord('time').attributes["valid_min"]
   del Tadv.coord('time').attributes["valid_max"]
   Tadv.convert_units("kg.s-3.m-1")
@@ -89,6 +102,7 @@ def cmems_mean_adv(year,path):
   nt,nz,ny,nx =Sadv.shape
   Tadv = Tadv.interpolate([("depth",-z.points)],iris.analysis.Linear(extrapolation_mode="extrapolate"))
   Sadv = Sadv.interpolate([("depth",-z.points)],iris.analysis.Linear(extrapolation_mode="extrapolate"))
+  # compute integrals
   Sadv_z = -1*iris.analysis.maths.multiply(Sadv,h,1).collapsed("depth",iris.analysis.SUM).collapsed("time",iris.analysis.MEAN)
   Tadv_z = -1*iris.analysis.maths.multiply(Tadv,h,1).collapsed("depth",iris.analysis.SUM).collapsed("time",iris.analysis.MEAN)
   Sadv_z.rename("cmems salinity advection")
@@ -97,6 +111,7 @@ def cmems_mean_adv(year,path):
   return Tadv_z,Sadv_z 
 
 def read_hcorr0():
+  # read heat corrections from first ocean model level
   hcorr = iris.load(relaxpath+"../HS_corrections/00*_tm_15yr_hcorr.nc")
   hcorr = iris.cube.CubeList([cube[:6] for cube in hcorr])
   iris.util.equalise_attributes(hcorr)
@@ -116,14 +131,17 @@ def read_hcorr0():
 
 
 def read_corr():
+  # read heat and salt corrections
   hcorr = iris.load(relaxpath+"../HS_corrections/00*_tm_15yr_hcorr.nc")
   scorr = iris.load(relaxpath+"../HS_corrections/00*_tm_15yr_scorr.nc")
   hcorr = iris.cube.CubeList([cube[:6] for cube in hcorr])
   scorr = iris.cube.CubeList([cube[:6] for cube in scorr])
+  # ocean constants
   rho = panMC(2003,"MC12","sea_water_density").load_iris([dt.datetime(2003,12,1)])[0].collapsed("time",iris.analysis.MEAN)
   cp = panMC(2003,"MC12","cp").load_iris([dt.datetime(2003,12,1)])[0].collapsed("time",iris.analysis.MEAN)
   cp.coords()[0].rename("z")
   rho.coords()[0].rename("z")
+  # fix metadata
   iris.util.equalise_attributes(hcorr+scorr)
   for cube in hcorr+scorr:
     try:
@@ -141,24 +159,29 @@ def read_corr():
   rho.remove_coord("time")
   cp.remove_coord("time")
   nt,nz,ny,nx=hcorr.shape
+  # apply dimension factors
   hcorr = hcorr#/rho/cp
   scorr = scorr*rho
+  # compute integrals
   hcorr_z = iris.analysis.maths.multiply(hcorr[:,:-1],h,1).collapsed("z",iris.analysis.SUM).collapsed("time",iris.analysis.MEAN)
   scorr_z = iris.analysis.maths.multiply(scorr[:,:-1],h,1).collapsed("z",iris.analysis.SUM).collapsed("time",iris.analysis.MEAN)
   return hcorr_z,scorr_z
 
 
 def compute(years,scratchpath):
-  hcorr,scorr = read_corr()
+  # calculate data for figure 2 
+  hcorr,scorr = read_corr() # load heat and salt corrections
   Q_ref = iris.cube.CubeList()
   Q_relax = iris.cube.CubeList()
   cmems = iris.cube.CubeList()
+  # load data
   for year in years:
-    Q_ref.append(surface_heat_flux_bias.load_ref(year,era5_path))
-    Q_relax.append(surface_heat_flux_bias.load_relax(year,relaxpath))
-    cmems += cmems_mean_adv(year,cmems_path)
+    Q_ref.append(surface_heat_flux_bias.load_ref(year,era5_path)) # reference heat flux
+    Q_relax.append(surface_heat_flux_bias.load_relax(year,relaxpath)) # relaxation run heat flux
+    cmems += cmems_mean_adv(year,cmems_path) # cmems T and S advection approximations
     Q_relax[-1].coord("time").convert_units("hours since 2003-11-01 00:00:00")
     Q_ref[-1].coord("time").convert_units("hours since 2003-11-01 00:00:00")
+  # fix metadata and compute means
   iris.util.equalise_attributes(Q_ref)
   Q_ref=Q_ref.merge_cube().collapsed("time",iris.analysis.MEAN)
   Q_relax=Q_relax.merge_cube().collapsed("time",iris.analysis.MEAN)
@@ -177,9 +200,11 @@ def compute(years,scratchpath):
       cube.coord("latitude").guess_bounds()
     except:
       continue
+  # regrid to heat and salt correction grid
   Sadv = Sadv.regrid(scorr,iris.analysis.AreaWeighted())
   Tadv = Tadv.regrid(hcorr,iris.analysis.AreaWeighted())
   Q_ref = Q_ref.regrid(hcorr,iris.analysis.AreaWeighted())
+  # fix units
   Sadv.convert_units(scorr.units)
   hcorr.convert_units("W/m2")
   hcorr.rename("heat_correction")
@@ -187,26 +212,32 @@ def compute(years,scratchpath):
   Q_ref.rename("era5 Q")
   Q_relax.rename("relax Q")
   Tadv.convert_units("W/m2")
+  # save to file
   iris.save(iris.cube.CubeList([scorr, hcorr, Q_ref,Q_relax, Sadv, Tadv]),scratchpath+"HScorr.nc")
 
 
 def plot(scratchpath,figname):
+  # load and plot data for figure 2
+  # core constants
   rho_w=iris.coords.AuxCoord(997,units="kg/m3")
   cp_w= iris.coords.AuxCoord(4200,units="J/kg/K")
   z_c = iris.coords.AuxCoord(318.1274,units="m")
   z_12 = iris.coords.AuxCoord(237.6925,units="m")
+  # load data
   data = iris.load(scratchpath+"/HScorr.nc") 
-  Sadv = data.extract("cmems salinity advection")[0]/2#/z_c/rho_w
-  Tadv = data.extract("cmems heat advection")[0]/2#/z_c/rho_w/cp_w
+  Sadv = data.extract("cmems salinity advection")[0]#/z_c/rho_w
+  Tadv = data.extract("cmems heat advection")[0]#/z_c/rho_w/cp_w
   hfb = (data.extract("relax Q")[0] - data.extract("era5 Q")[0])
   hcorr = data.extract("heat_correction")[0]#/z_12/rho_w/cp_w
   scorr = data.extract("salinity_correction")[0]#/z_12/rho_w
+  # normalise units
   Tadv.convert_units("W/m2")
   hcorr.convert_units("W/m2")
   hfb.convert_units("W/m2")
   scorr.convert_units("g/m2/hour")
   Sadv.convert_units("g/m2/hour")
   fig=plt.figure(figsize=(9,5))
+  # plot figure
   for i,cube in enumerate([ scorr, Sadv,  hcorr, Tadv,hfb, hcorr+hfb]):
     ax=plt.subplot(3,2,1+i,projection=ccrs.PlateCarree())
     ax.set_facecolor("0.5")

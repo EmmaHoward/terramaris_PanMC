@@ -1,6 +1,10 @@
 import iris
 from iris.coord_categorisation import add_hour,add_month,add_categorised_coord
 
+#
+# Compute diurnal means of GPM data for each year
+#
+
 def add_time_of_day(cube, coord, name='hour'):
     def _time_of_day(coord, value):
         pt = coord.units.num2date(value)
@@ -10,7 +14,7 @@ def add_time_of_day(cube, coord, name='hour'):
 	
 for year in [2003,2005,2007,2009,2012,2014,2015,2016,2017,2018]:
   print(year)
-  data = iris.load("/work/scratch-pw2/dship/obs/GPM-IMERG-v6/%d/precipitationCal_half-hourly_pt1deg_MC12domain_*.nc"%year)
+  data = iris.load("/work/scratch-pw2/emmah/obs/GPM-IMERG-v6/%d/precipitationCal_half-hourly_pt1deg_MC12domain_*.nc"%year)
   iris.util.equalise_attributes(data)
   data=data.concatenate_cube()
   add_time_of_day(data,'time')

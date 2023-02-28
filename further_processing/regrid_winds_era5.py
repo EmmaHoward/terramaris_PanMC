@@ -1,4 +1,9 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
+
+#
+# regrid daily mean 850 and 200 hPa winds to era5 grid
+#
+
 from matplotlib.colors import ListedColormap
 from panMC import panMC
 import seaborn as sns
@@ -23,8 +28,8 @@ cz = iris.Constraint(pressure=lambda p: p in [200,850])
 year = int(sys.argv[1])
 MC = sys.argv[2]
 scratchpath = "/work/scratch-pw2/emmah/tmp_%s/"%MC
-finalpath = {"MC2": "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/sst/",
-             "MC12":"/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/sst/"}[MC]
+finalpath = {"MC2": "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/wind/",
+             "MC12":"/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/wind/"}[MC]
 
 
 def adjust_doyr(cube):
@@ -49,7 +54,7 @@ def regrid_wind(year,MC):
     u = u.aggregated_by("doyr",iris.analysis.MEAN)
     v = v.aggregated_by("doyr",iris.analysis.MEAN)
 #
-    template =  iris.load("/gws/nopw/j04/terramaris/emmah/era5/uv_201412.nc",cx&cy).extract("eastward_wind")[0]
+    template =  iris.load("/gws/nopw/j04/terramaris/emmah/era5/uv_201415.nc",cx&cy).extract("eastward_wind")[0]
     template = template.rolling_window("latitude",iris.analysis.MEAN,2)
     template.coord("longitude").guess_bounds()
 #
@@ -69,8 +74,8 @@ def regrid_wind(year,MC):
     adjust_doyr(u)
     adjust_doyr(v)
 #
-    iris.save([u,v],"%s/%s_%04d%02d_winds_regridded0p25_.nc"%(scratchpath,MC,year,(year+1)%100),zlib=True)
-    check_call("cp %s/%s_%04d%02d_winds_regridded0p25_.nc %s"%(scratchpath,MC,year,(year+1)%100,finalpath),shell=True) 
-    check_call("rm %s/%s_%04d%02d_winds_regridded0p25_.nc"%(scratchpath,MC,year))
+    iris.save([u,v],"%s/%s_%04d%02d_winds_regridded0p25.nc"%(scratchpath,MC,year,(year+1)%100),zlib=True)
+    check_call("cp %s/%s_%04d%02d_winds_regridded0p25.nc %s"%(scratchpath,MC,year,(year+1)%100,finalpath),shell=True) 
+    check_call("rm %s/%s_%04d%02d_winds_regridded0p25.nc"%(scratchpath,MC,year,(year+1)%100),shell=True)
 
 regrid_wind(year,MC)

@@ -1,3 +1,7 @@
+#
+# plot sst biases (Figure 2)
+#
+
 import iris
 from panMC import panMC
 from bias_plots import bias_plots
@@ -15,16 +19,19 @@ ref_path = "/gws/nopw/j04/terramaris/emmah/coupled_N1280/kpp_relaxation/"
 sst12 = iris.cube.CubeList()
 sstref = iris.cube.CubeList()
 
+# domain bounds
 cx = iris.Constraint(longitude=lambda lon: 90.5<=lon<=154.5)
 cy = iris.Constraint(latitude=lambda lat: -15<=lat<=15)
 
 def load(year,MC):
+  # load sst data (diurnal mean)
   outname = "%s_%04d%02d_diurnal_sea_temperature.nc"%(MC,year,(year+1)%100)
   dcmean = iris.load(path.format(MC)+outname)[0]
   return dcmean
 
 
 def load_ref(year,path,scratchpath=None,regen=False):
+  # load reference sst data (return monthly mean)
   outname = "ref_%04d%02d_surf_temperature.nc"%(year,(year+1)%100)
   if os.path.exists(path+"/monthlymean/"+outname) and not regen:
     print("exists")
@@ -52,12 +59,14 @@ def load_ref(year,path,scratchpath=None,regen=False):
   return mean 
 
 def daily_mean(year,MC):
+  # load sst data (daily mean)
   outname = "%s_%04d%02d_daily_sea_temperature.nc"%(MC,year,(year+1)%100)
   print(year)
   dmean = iris.load(path.format(MC)+outname)[0]
   return dmean
 
 def load_ref_surf(year,path,level):
+    # load reference sst data (return single model level, daily data)
     data = iris.load(path+"%04d/%04d_00???_temperature_relax.nc"%(year,year))
     tmp = []
     times = []
@@ -81,14 +90,21 @@ def load_ref_surf(year,path,level):
     [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
     return data[:,level]
 
-def calc_mse(year,MC,level,scratchpath,regen=False): 
+
+"""
+old: interannual rmse
+
+def calc_mse(year,MC,level,scratchpath,regen=False): '
+  # compute mean square error for a single year
   if os.path.exists(scratchpath+"%04d_%s_sst_mse.nc"%(year,MC)) and not regen:
+     # load cached data
      print("exists")
      mse = iris.load_cube(scratchpath+"%04d_%s_sst_mse.nc"%(year,MC))
      if mse.ndim==2:
        mse=mse = mse[:,level]
      return mse
   else:
+    # load daily data
     ct= iris.Constraint(time = lambda t: t.point.month in [12,1,2] and not (t.point.month,t.point.day)==(2,29))
     model =  daily_mean(year,MC)[:,level]
     ref = load_ref_surf(year,ref_path,level).extract(ct)
@@ -109,14 +125,18 @@ def calc_mse(year,MC,level,scratchpath,regen=False):
     model.coord("time").bounds = None
     iris.util.equalise_attributes([model,ref])
     if MC=="MC2":
+      # restrict to MC2 domain
       ref = ref[:,54:-54,41:-41] 
-
+    # compute mse
     model = ((model - ref)**2).extract(cx&cy).collapsed(["longitude","latitude"],iris.analysis.MEAN)
     model.rename("mse_%s_sea_temperature"%MC)
+    # cache data
     iris.save(model,scratchpath+"%04d_%s_sst_mse.nc"%(year,MC))
     return model
 
+
 def combine_rmse(years,MC,level,scratchpath,regen=False):
+ # compute overall rmse from annual mses
  mse = iris.cube.CubeList()
  for year in years:
    yc = iris.coords.AuxCoord(year,long_name="year",units="years")
@@ -137,8 +157,10 @@ def combine_rmse(years,MC,level,scratchpath,regen=False):
    rmse = mse**0.5
  return mse,rmse
 
+"""
 
 def load_all(years12,years2,scratchpath=None,regen=False):
+  # load sst data (monthly means)
   sst2 = iris.cube.CubeList()
   sst12 = iris.cube.CubeList()
   sstref = iris.cube.CubeList()
@@ -167,6 +189,8 @@ def load_all(years12,years2,scratchpath=None,regen=False):
  
 
 def rmse_new():
+  # compute rmse for climatological seasonal mean
+  # load data
   MC12 = iris.load_cube("/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/sst/MC12_clim_daily_sea_temperature.nc",cx&cy)
   MC2 =  iris.load_cube("/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/sst/MC2_clim_daily_sea_temperature.nc",cx&cy)
   ref = iris.load_cube("/home/users/emmah/eval/clim_reference_sst.nc",cx&cy)
@@ -177,26 +201,31 @@ def rmse_new():
   MC2.remove_coord('time')
   ref.add_dim_coord(MC12.coord('time'),0)
   MC2.add_dim_coord(MC12.coord('time'),0)
+  # mask (note units are in Kelvin)
   MC12.data.mask += MC12.data < 5
   MC2.data.mask += MC2.data < 5
   ref.data = np.ma.masked_array(ref.data,ref.data==0)
-  import pdb;pdb.set_trace()
+  # compute rmse
   rmse_MC12 = ((MC12 - ref)**2).collapsed(['longitude','latitude'],iris.analysis.MEAN)**0.5
   rmse_MC2 = ((MC2 - ref)**2).collapsed(['longitude','latitude'],iris.analysis.MEAN)**0.5
   return rmse_MC12,rmse_MC2
 
 def main(years12,years2,scratchpath,figname=None,regen=False):
+  # create figures
 #  mse12, rmse12 = combine_rmse(years12,"MC12",5,scratchpath,regen=regen)
 #  mse2, rmse2 = combine_rmse(years2,"MC2",5,scratchpath,regen=regen)
+  # load rmse data
   rmse12,rmse2 = rmse_new()
+  # load sst data
   sst12,sst2,sstref = load_all(years12,years2,scratchpath,regen)
   if not figname is None:
     ct=iris.Constraint(time=lambda t:t.point.month in [12,1,2])
+    # calculate means
     sst12=sst12.collapsed("time",iris.analysis.MEAN)
     sst2=sst2.collapsed("time",iris.analysis.MEAN)
-    #sst12=sst12.concatenate_cube().aggregated_by("month",iris.analysis.MIN).collapsed("time",iris.analysis.MEAN)
     sstref=sstref.extract(ct).collapsed("time",iris.analysis.MEAN)
 
+    # deal with metadata
     sstref.coord("longitude").var_name=None
     sstref.coord("longitude").attributes={}
     sstref.coord("latitude").var_name=None
@@ -217,15 +246,14 @@ def main(years12,years2,scratchpath,figname=None,regen=False):
     sst2.coord("latitude").guess_bounds()
 
     sst2 = sst2.regrid(sst12,iris.analysis.Linear(extrapolation_mode="mask"))
-    #sst2_ = sst12.copy(data=np.ma.masked_array(np.ones(sst12.data.shape),mask=True))
-    #sst2_.data[54:-54,41:-41]  = sst2.data
-    #sst2 = sst2_
-
+    # build plots
     fig=bias_plots([sst2[3],sst12[3],sstref[3]], ["MC2","MC12","Reference"] ,cmap1="magma",cmap2="bwr",projection=ccrs.PlateCarree(),minmaxN1rangeN2=(20,32,13,1.1,12),nmax=12,above=True,mark_inner=True)
     fig.set_figwidth(12)
     fig.set_figheight(7)
     fig.subplots_adjust(right=0.94,left=0.04,bottom=0.05)
     fig.suptitle("Foundational Sea Surface Temperature")
+    fig.tight_layout()
+    # add panel g:rmse
     ax = fig.add_axes([0.07,0.07,0.5,0.2])
     ax.set_xticks([365-31,365-16,365+1,365+15,365+31,365+31+15,365+31+28])
     ax.set_xticklabels(["1-Dec","15-Dec","1-Jan","15-Jan","1-Feb","15-Feb","28-Feb"])
@@ -233,7 +261,7 @@ def main(years12,years2,scratchpath,figname=None,regen=False):
     plt.plot(np.arange(365-31,365-31+90,1),rmse2.data,label="MC2",axes=ax,c="b")
     plt.grid()
     #[iplt.plot(mse12[i]**0.5,axes=ax,label=year,c="0.5",lw=1) for i,year in enumerate(years12)]
-    ax.set_title("RMSE Error")
+    ax.set_title("(g) RMSE Error")
     plt.legend() 
     #ax.set_xlim(365-31,365+31+28)
     fig.savefig(figname)

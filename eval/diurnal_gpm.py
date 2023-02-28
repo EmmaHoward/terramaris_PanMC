@@ -1,3 +1,7 @@
+#
+# plot rainfall diurnal cycles (Figure 5)
+#
+
 import iris
 import iris.plot as iplt
 from panMC import panMC
@@ -13,21 +17,20 @@ from iris.util import equalise_attributes
 from iris.coord_categorisation import add_categorised_coord
 from subprocess import check_call
 import seaborn as sns
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import LinearSegmentedColormap
 import sst_bias
 import precip_bias
- 
+from matplotlib.cm import get_cmap
+from scipy.interpolate import CubicSpline
+
+
+# domain limits
 cx = iris.Constraint(longitude = lambda x: 84 < x < 161)
 cy = iris.Constraint(latitude  =  lambda y: -21 < y < 21)
 
 
-#MC12_years = [2003,2014,2015,2016,2017]
 MC12_path = "/gws/nopw/j04/terramaris/panMC_um/MC12_GA7/postprocessed_outputs/precip/"
 MC2_path = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/precip/"
-
-#MC2_years = [2015,2016]
-#MC2_path = "/gws/nopw/j04/terramaris/emmah/Q1Q2_analysis/%04d%02d_MC2_coarsened_diurnal_precip_MC12.nc" 
-
 ref_path = "/gws/nopw/j04/klingaman/datasets/GPM_IMERG/monthly/"
 
 from iris.coord_categorisation import add_hour,add_month
@@ -40,7 +43,7 @@ def add_time_of_day(cube, coord, name='hour'):
                           _time_of_day)
 	
 def diurnal_amp_peak(cube):
-#  add_time_of_day(cube,"time","minhour")
+  # calculate time of diurnal max in local standard time, diurnal range and overall mean precip
   cube = cube.aggregated_by("hour",iris.analysis.MEAN)
   lon = cube.coord("longitude").points
   utc = cube.coord("hour").points
@@ -54,6 +57,7 @@ def diurnal_amp_peak(cube):
   return amp,lst,mean
 
 def load_precip(MC12_years,MC2_years):
+  # load rainfall data (use precip_bias loader)
   P12 = iris.cube.CubeList()
   P2 = iris.cube.CubeList()
   for year in MC12_years:
@@ -75,89 +79,52 @@ def load_precip(MC12_years,MC2_years):
   return P2,P12
 
 
-def load_sst(years12,years2):
-#  sst2 = iris.cube.CubeList()
-#  sst2.append(sst_bias.load(2015,"MC2-tmp","/gws/nopw/j04/terramaris/emmah/coupled_2km/production_runs/postprocessed_outputs/"))
-#  sst2.append(sst_bias.load(2016,"MC2","/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/postprocessed_outputs/"))
-#  iris.util.equalise_attributes(sst2)
-#  for cube in sst2:
-#    cube.coord("time").convert_units("days since 2003-01-01")
-#  sst2=sst2.concatenate_cube()
-
-  sst12,sst2,sstref = sst_bias.load_all(years12,years2)
-#  sst12 = sst12.extract(iris.Constraint(time=lambda t: t.point.month==12))
-#  print(sst2)
-#  print(sst12)
-  sst2 = sst2[:,0].aggregated_by("hour",iris.analysis.MEAN)
-  sst12 = sst12[:,0].aggregated_by("hour",iris.analysis.MEAN)
-  return sst2,sst12
-
 def plot(years12,years2,figname):
+  #plot diurnal cycle figures
+  # load data
   P2,P12 = load_precip(years12,years2)
   P2 = P2.regrid(P12,iris.analysis.AreaWeighted())
-#  sst2,sst12 = load_sst(years12,years2)
-#  sst2_range = sst2.collapsed("hour",iris.analysis.MAX) - sst2.collapsed("hour",iris.analysis.MIN)
-#  sst12_range = sst12.collapsed("hour",iris.analysis.MAX) - sst12.collapsed("hour",iris.analysis.MIN)
   GPM = iris.load_cube("/work/scratch-pw2/emmah/gpm_diurnal.nc")
-  GPM.data = GPM.data[:,::-1]
+  GPM.data = GPM.data[:]
   GPM.convert_units(P2.units)
+  # compute diurnal cycle properties
   amp12,peak12,mean12 = diurnal_amp_peak(P12)
   amp2,peak2,mean2 = diurnal_amp_peak(P2)
   ampref,peakref,meanref = diurnal_amp_peak(GPM)
+  # mask data with weak diurnal cycle or low rain rates
   peak_2  = peak2.copy()
   peak_2.data =np.ma.masked_array(peak_2.data,(amp2.data<1)+(mean2.data<5))
   peak_12  = peak12.copy()
   peak_12.data =np.ma.masked_array(peak_12.data,(amp12.data<1)+(mean12.data<5))
   peak_ref = peakref.copy()
   peak_ref.data = np.ma.masked_array(peakref.data,(ampref.data<1)+(meanref.data<5))
-#
-  diff = peak_2 - peak_12.regrid(peak_2,iris.analysis.Linear())
-  diff = diff.data%24
-  diff[diff>12] = diff[diff>12] - 24
-  diff = peak_2.copy(data=diff)
-#
-#  diff_sst= sst2_range-sst12_range.regrid(sst2_range,iris.analysis.Nearest())
-  cmap1 = ListedColormap(sns.color_palette("turbo",12))
-  cmap2 = ListedColormap(sns.color_palette('twilight_shifted',12))
-  cmap3=ListedColormap(sns.color_palette("viridis",8))
-  cmap4=ListedColormap(sns.color_palette("bwr",9))
-
+  # build colormap, adjust to make more cyclic
+  rgb = get_cmap('turbo')(list(np.arange(1/24,1,1/12)))
+  rgb_new = rgb.copy()
+  n,skip = 12,2
+  for i in range(3):
+    rgb_new[:,i] = CubicSpline(list(range(0,n//2-skip))+list(range(n//2+skip,n+1)),rgb[list(range(n//2,n-skip))+list(range(skip,n//2+1))][:,i])(list(range(n//2,n))+list(range(0,n//2)))
+  cdict = {colour: np.array([np.linspace(0,1,13),[rgb_new[0,i]*0]+list(rgb_new[:,i]),list(rgb_new[:,i])+[rgb_new[-1,i,]]]).T for i,colour in enumerate(['red','green','blue'])}
+  cmap1=LinearSegmentedColormap("",cdict)
   fig=plt.figure(figsize=(10,3))
-  
+  # build figure
   ax,p = [],[]
-  for i,(cube,cmap,vmin,vmax,title,extend) in enumerate([(peak_2    ,cmap1,  0,24  ,"MC2 Hour of Max Precipitation",None),
-                                     (peak_12    ,cmap1,  0,24,  "MC12 Hour of Max Precipitation",None),
-                                     (peak_ref   ,cmap1,  0,24,  "GPM Hour of Max Precipitation",None)]):
-              #                       (diff       ,cmap4,-6.75,6.75,  "MC2 - MC12: Hour of Max Precipitation","Both"),
-              #                       (sst2_range ,cmap3,  0,0.8, "MC2 Diurnal SST Range",None),
-              #                       (sst12_range,cmap3,  0,0.8,  "MC12 Diurnal SST Range",None),
-              #                       (diff_sst   ,cmap4,-0.225,0.225,"MC2 - MC12 Diurnal SST Range",None)]):
+  for i,(cube,cmap,vmin,vmax,title,extend) in enumerate([(peak_2    ,cmap1,  0,24  ,"(a) MC2 Hour of Max Precipitation",None),
+                                     (peak_12    ,cmap1,  0,24,  "(b) MC12 Hour of Max Precipitation",None),
+                                     (peak_ref   ,cmap1,  0,24,  "(c) GPM Hour of Max Precipitation",None)]):
     ax.append(plt.subplot(1,3,1+i,projection=ccrs.PlateCarree()))
     ax[-1].coastlines()
     plt.xlim(90,155)
     plt.ylim(-15,15)
     p.append(iplt.pcolormesh(cube,vmin=vmin,vmax=vmax,cmap=cmap))
     plt.title(title)
-#
-#  mask = diff.copy(data=np.ma.masked_array(np.ones(diff.shape)))
-#  mask.data.mask = (diff.data <6)*(diff.data>-6)
-#  mask.data.mask += peak_12.data.mask
-#  iplt.pcolormesh(mask,axes=ax[2],cmap="binary",vmin=0,vmax=2)
-
   fig.colorbar(p[0],ax=ax,ticks=np.arange(0,25,4),orientation="horizontal")
-#  fig.colorbar(p[1],ax=ax[1],ticks=np.arange(0,25,4),orientation="horizontal")
-#  fig.colorbar(p[3],ax=ax[3],ticks=np.arange(0,.81,0.2),orientation="horizontal")
-#  fig.colorbar(p[4],ax=ax[4],ticks=np.arange(0,.81,0.2),orientation="horizontal")
-#  fig.colorbar(p[5],ax=ax[5],ticks=np.arange(-0.2,0.21,0.1),orientation="horizontal")
-#  c=fig.colorbar(p[2],ax=ax[2],ticks=np.arange(-6,7,3),orientation="horizontal")
-#  c.set_ticklabels(["Late"]+list(range(-3,6,3))+["Early"])
-#  fig.subplots_adjust(top=0.964,bottom=0.048,left=0.026,right=0.967,hspace=0.125,wspace=0.136)
   fig.subplots_adjust(top=0.95,bottom=0.35,left=0.015,right=0.985,hspace=0.2,wspace=0.048)
-  fig.savefig(figname)
+  fig.savefig(figname,dpi=300)
   plt.show()
 
 years= [2003,2005,2007,2009,2012,2014,2015,2016,2017,2018]
 if __name__ == "__main__":
-  plot(years,years,"/home/users/emmah/eval_figs/diurnal_cycle_new.png")
+  plot(years,years,"/home/users/emmah/eval_figs_Feb23/diurnal_cycle_new.png")
 
 

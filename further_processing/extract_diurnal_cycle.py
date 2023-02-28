@@ -1,5 +1,9 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
 
+#
+# compute diurnal mean of precipitation
+#
+
 from panMC import panMC
 from iris.experimental.equalise_cubes import equalise_attributes
 import iris
@@ -31,7 +35,7 @@ def main(year,MC):
   data = panMC(year,MC,"rainfall").load_iris(variables=variables)
   for cube in data:
     add_time_of_day(cube,"time","hour")
-  for month in [2]:
+  for month in [12,1,2]:
     ct = iris.Constraint(time=lambda t: t.point.month==month)
     new = iris.cube.CubeList([cube.extract(ct).aggregated_by("hour",iris.analysis.MEAN) for cube in data])
     iris.save(new,"%s/%04d%02d_diurnal_precip.nc"%(scratchpath,year+int(month<6),month),zlib=True)

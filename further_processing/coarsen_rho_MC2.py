@@ -1,4 +1,9 @@
-#!/apps/contrib/jaspy/miniconda_envs/jaspy3.7/m3-4.5.11/envs/jaspy3.7-m3-4.5.11-r20181219/bin/python
+#
+# coarsen air density from MC12 to MC2 grid
+# for Yanai-style Q1/Q2 analysis
+#
+
+#!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
 from iris.aux_factory import HybridHeightFactory
 from scipy.fftpack import dct,idct
 import stratify
@@ -7,7 +12,6 @@ from iris.experimental.equalise_cubes import equalise_attributes
 import numpy as np
 import datetime as dt
 from iris.aux_factory import HybridHeightFactory
-from iris.analysis import calculus_centred,calculus
 import os
 import sys
 from area_weighted_regrid_constant_altitude import AreaWeightedAltitude
@@ -18,7 +22,7 @@ t1 = dt.datetime(year,12,1)
 
 scratchpath = "/work/scratch-pw2/emmah/tmp_Q1Q2/rho"
 #path = "/gws/nopw/j04/terramaris/emmah/testrun/u-bs742/processed/terramaris_15km_MC_GA7/"
-check_call("mkdir "+scratchpath,shell=True)
+check_call("mkdir -p "+scratchpath,shell=True)
 def add_altitude_coord(cube):
         orog=iris.load(orogpath)[0]#.extract(cx&cy)
         orog_c = iris.coords.AuxCoord(orog.data,standard_name='surface_altitude',units='m')
@@ -30,7 +34,7 @@ def add_altitude_coord(cube):
         cube.add_aux_factory(a)
 
 
-path = "/gws/nopw/j04/terramaris/emmah/coupled_2km/production_runs/%04d%02d_u-cc339/"%(year,(year+1)%100)
+path = "/gws/nopw/j04/terramaris/panMC_um/MC2_RA2T/%04d%02d_u-cc339/"%(year,(year+1)%100)
 orogpath = "/gws/nopw/j04/terramaris/emmah/coupled_2km/orog.pp"
 
 cx = iris.Constraint(longitude=lambda lon: 90<=lon<=155)
@@ -93,7 +97,8 @@ def exner_rho(date):
   rho = interp2km(rho)
   iris.save(rho,"%s/rho_%d%02d%02d_%02d.nc"%(scratchpath,date.year,date.month,date.day,date.hour))
 
-job =int(os.environ["SLURM_ARRAY_TASK_ID"]) -1 
-for i in range(0,24,4):
+job = 0#int(os.environ["SLURM_ARRAY_TASK_ID"]) -1 
+#for i in range(0,24,4):
+for i in range(0,4,4):
   exner_rho(t1+dt.timedelta(job+i/24))
 

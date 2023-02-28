@@ -1,4 +1,9 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
+
+#
+# Calculate Yanai Q1 and Q2 heating terms for MC2
+# Emma's code, not Dan's update
+
 from subprocess import check_call
 import stratify
 import iris
@@ -7,10 +12,10 @@ from iris.util import equalise_attributes
 import numpy as np
 import datetime as dt
 from iris.aux_factory import HybridHeightFactory
-from iris.analysis import calculus_centred,calculus
 import os
 import sys
-
+import calculus_centred
+from iris.analysis import calculus
 year = int(sys.argv[1])
 
 t1 = dt.datetime(year,12,1)
@@ -80,10 +85,10 @@ def exner_rho(date):
 # read rho from pa stream.
 # if calculating potential temperature increment, uncomment code to read pressure and calculate exner pressure here
 
-  rho = iris.load("/work/scratch-nopw/emmah/rho/rho_%d%02d%02d_*.nc"%(date.year,date.month,date.day),cx&cy)
+  rho = iris.load(scratchpath+"rho/rho_%d%02d%02d_*.nc"%(date.year,date.month,date.day),cx&cy)
   if not (date.day==1 and date.month==12):
     datem1 = date+dt.timedelta(-1)
-    rho += iris.load("/work/scratch-nopw/emmah/rho/rho_%d%02d%02d_20.nc"%(datem1.year,datem1.month,datem1.day),cx&cy)
+    rho += iris.load(scratchpath+"/rho/rho_%d%02d%02d_20.nc"%(datem1.year,datem1.month,datem1.day),cx&cy)
   equalise_attributes(rho)
   rho = rho.extract("air_density").concatenate_cube()
   a = HybridHeightFactory(rho.coord('atmosphere_hybrid_height_coordinate'),\
@@ -92,8 +97,8 @@ def exner_rho(date):
   rho.add_aux_factory(a)
   if date.day==1 and date.month==12:
     rho0 = rho[0]
-    rho0.coord("time").points = 720.5
-    rho0.coord("time").bounds = [[720,721]]
+    rho0.coord("time").points = rho0.coord("time").units.date2num(date.replace(hour=0,minute=30))
+    rho0.coord("time").bounds = [ rho0.coord("time").units.date2num([date.replace(hour=0,minute=0), date.replace(hour=1,minute=0)]) ]
     rho_roll = rho.rolling_window("time",iris.analysis.MEAN,2)
     rho_roll.data=rho_roll.data.astype("float32")
     rho0.cell_methods = rho_roll.cell_methods
@@ -237,7 +242,7 @@ def main(date,i):
   # save to file
   out = iris.cube.CubeList([dT_sub,dq_sub,dT_sg,dq_sg,data.extract("air_density")[0]])
   for cube in out:
-    cube.data = cube.data.as_type(float)
+    cube.data = cube.data.astype(float)
   filename = "tma_2km_KPPcoupled_Q1Q2_%03d_%04d%02d%02d.nc"%(i*12,date.year,date.month,date.day)
   iris.save(out,"%s/%s"%(scratchpath,filename),zlib=True)
   check_call("cp %s/%s %s/Q1Q2/%s"%(scratchpath,filename,path,filename),shell=True)
@@ -245,6 +250,6 @@ def main(date,i):
 
 
 
-job =  int(os.environ["SLURM_ARRAY_TASK_ID"]) -1 
+job = int(os.environ["SLURM_ARRAY_TASK_ID"]) -1 
 main(t1+dt.timedelta(job),9)
 

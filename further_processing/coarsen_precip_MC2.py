@@ -1,5 +1,10 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
 
+#
+# calculate hourly mean of MC2 rainfall on MC12 grid
+# note: units are mm/15 minutes not mm/hour
+#
+
 from panMC import panMC
 import iris
 from iris.coord_categorisation import add_hour,add_day_of_year

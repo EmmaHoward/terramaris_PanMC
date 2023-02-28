@@ -1,9 +1,14 @@
 #!/apps/jasmin/jaspy/miniconda_envs/jaspy3.8/m3-4.9.2/envs/jaspy3.8-m3-4.9.2-r20211105/bin/python
+
+
+#
+# calculate daily mean, average diurnal cycle and daily diurnal range of SST 
+#
+
 import iris
 import iris.cube
 from panMC import panMC
 import sys
-from bias_plots import bias_plots
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import os
@@ -38,7 +43,7 @@ def adjust_doyr(cube):
 def calc_diurnal_mean_sst(year,MC,path):
     outname = "%s_%04d%02d_diurnal_sea_temperature.nc"%(MC,year,(year+1)%100)
     data=panMC(year,MC,"sea_water_temperature").load_iris()[0]
-    [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
+#    [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
     data.coord("time").bounds = np.array([np.round(data.coord("time").points)-1,np.round(data.coord("time").points)]).T
     data.coord("time").points = np.round(data.coord("time").points)-0.5
     add_hour(data,"time","hour")
@@ -51,7 +56,7 @@ def calc_diurnal_mean_sst(year,MC,path):
 def calc_daily_mean_sst(year,MC,path):
     outname = "%s_%04d%02d_daily_sea_temperature.nc"%(MC,year,(year+1)%100)
     data=panMC(year,MC,"sea_water_temperature").load_iris()[0]
-    [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
+#    [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
     data.coord("time").bounds = np.array([np.round(data.coord("time").points)-1,np.round(data.coord("time").points)]).T
     data.coord("time").points = np.round(data.coord("time").points)-0.5
     add_day_of_year(data,"time","doyr")
@@ -63,7 +68,7 @@ def calc_daily_mean_sst(year,MC,path):
 def calc_diurnal_range_sst(year,MC,path):
     outname = "%s_%04d%02d_sst_diurnal_range.nc"%(MC,year,(year+1)%100)
     data=panMC(year,MC,"sea_water_temperature").load_iris()[0]
-    [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
+#    [c for (c,i) in data._dim_coords_and_dims if i==1][0].rename("depth")
     data.coord("time").bounds = np.array([np.round(data.coord("time").points)-1,np.round(data.coord("time").points)]).T
     data.coord("time").points = np.round(data.coord("time").points)-0.5
     add_day_of_year(data,"time","doyr")

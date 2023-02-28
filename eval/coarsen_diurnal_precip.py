@@ -1,3 +1,6 @@
+#
+# coarsen MC2 diurnal rainfall to MC12 grid
+#
 import iris
 import iris.cube
 
